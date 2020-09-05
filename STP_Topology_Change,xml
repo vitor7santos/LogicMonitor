@@ -5,26 +5,33 @@
   <errmsg>OK</errmsg>
   <interval>0</interval>
     <entry type="predatasource">
-        <version>1599215138</version>
+        <version>1599307611</version>
         <name>STP_Topology_Change</name>
         <displayedas>Topology Change</displayedas>
-        <description>This will get the TCN (Topology Change) value per Vlan</description>
+        <description>Retrieves the last TCN (Topology Change) value per Vlan
+
+----------------------------------------------------------------------------------------------------------------------------------------------------
+Supported SNMP version(s):
+- v1/v2c/v3 (read the Technical Notes for SNMP v3 context)
+
+NOTE: SNMP v3 (context feature)
+
+- In order to poll data for each specific vlan (using SNMPv3) the actual user/group needs to have &#39;vlan-&#39; context allowed (below you&#39;ll find a config example on a Cisco device):
+
+-&#62; snmp-server group &#60;group&#62; v3 &#60;authType&#62; context vlan- match prefix
+----------------------------------------------------------------------------------------------------------------------------------------------------</description>
         <collector>batchscript</collector>
         <hasMultiInstances>true</hasMultiInstances>
         <schedule>300</schedule>
-        <appliesTo>system.displayname == &#34;AMP-CB-CORE-SW01&#34;</appliesTo>
+        <appliesTo>(isCisco() &#38;&#38; isNetwork()) &#38;&#38; system.sysinfo !~ &#34;Cisco Controller&#34;</appliesTo>
         <wildcardauto>true</wildcardauto>
         <wildcardpersist>false</wildcardpersist>
         <wildcardlinuxscript>ad_script</wildcardlinuxscript>
         <wildcardlinuxcmdline>type=&#34;embeded&#34; </wildcardlinuxcmdline>
         <wildcardwinscript>ad_script</wildcardwinscript>
         <wildcardwincmdline>type=&#34;embeded&#34; </wildcardwincmdline>
-        <wildcardgroovyscript>import com.santaba.agent.groovyapi.expect.Expect;
-import com.santaba.agent.groovyapi.snmp.Snmp;
-import com.santaba.agent.groovyapi.http.*;
-import com.santaba.agent.groovyapi.jmx.*;
-import org.xbill.DNS.*;
-import com.santaba.agent.groovyapi.snmp.Snmp;
+        <wildcardgroovyscript>import com.santaba.agent.groovyapi.snmp.Snmp;
+import com.santaba.agent.collector3.snmp.SNMPCollector;
 
 //array to store the interfaces
 array_vlans = [];
@@ -32,24 +39,40 @@ array_vlans_descr = [];
 
 //OID variables
 stpTCN=&#34;.1.3.6.1.2.1.17.2.3.0&#34; //get the actual TCN for the STP (for each VLAN)
-vlan_indexes = &#34;.1.3.6.1.4.1.9.9.46.1.3.1.1.3&#34; //VLAN Type
-vlan_description = &#34;.1.3.6.1.4.1.9.9.46.1.3.1.1.4&#34; //VLAN Name
+vlan_indexes = &#34;.1.3.6.1.4.1.9.9.46.1.3.1.1.3&#34; //CISCO VLAN MIB
+vlan_description = &#34;.1.3.6.1.4.1.9.9.46.1.3.1.1.4&#34; //VLAN Name/Descr
 
 //device variables
 deviceIP = hostProps.get(&#34;system.hostname&#34;);
-snmpCommunity_raw = hostProps.get(&#34;snmp.community&#34;);
 snmpVersion = hostProps.get(&#34;snmp.version&#34;);
 
-interfaceWalk = Snmp.walk(deviceIP, vlan_indexes)
-interfaceWalk.eachLine() {
+if(snmpVersion==&#34;v3&#34;){
+	snmp_auth = hostProps.get(&#34;snmp.auth&#34;);
+	snmp_authToken = hostProps.get(&#34;snmp.authToken&#34;);
+	snmp_priv = hostProps.get(&#34;snmp.priv&#34;);
+	snmp_privToken = hostProps.get(&#34;snmp.privToken&#34;);
+	snmp_security = hostProps.get(&#34;snmp.security&#34;);
+	snmpCommunity = &#34;&#34;; //start this null
+}else{
+	snmpCommunity = hostProps.get(&#34;snmp.community&#34;); //retrieve SNMP community
+	snmp_auth = &#34;&#34;; //start this null
+	snmp_authToken = &#34;&#34;; //start this null
+	snmp_priv = &#34;&#34;; //start this null
+	snmp_privToken = &#34;&#34;; //start this null
+	snmp_security = &#34;&#34;; //start this null
+}
+
+//retrieve the VLAN(s) 
+vlanWalk = snmp(&#34;walk&#34;, snmpVersion, deviceIP, vlan_indexes, snmpCommunity, snmp_security, snmp_auth, snmp_authToken, snmp_priv, snmp_privToken, &#34;&#34;, &#34;&#34;, 3000)
+//iterate over the SNMP WALK
+vlanWalk.eachLine() {
 	line -&#62;
 		vlanType= line.minus(vlan_indexes + &#34;.&#34;).split(&#34; = &#34;)[1] //get the content of the specific OID
-  		vlanNumber_raw= line.minus(vlan_indexes + &#34;.&#34;).split(&#34; = &#34;)[0] //get the actual extra OID portion that was added (since that&#39;s the actual VLAN ID)
+		vlanNumber_raw= line.minus(vlan_indexes + &#34;.&#34;).split(&#34; = &#34;)[0] //get the actual extra OID portion that was added (since that&#39;s the actual VLAN ID)
 		vlanNumber = vlanNumber_raw.replace(&#34;1.&#34;, &#34;&#34;); //remove the WEIRD &#39;1.&#39; that get&#39;s added to the OID
 
-		if(vlanType != &#34;1&#34;){
-			//doNothing (since we only care about type==1 [ethernet])
-		}else{
+		//we only care about type==1 [ethernet])
+		if(vlanType == &#34;1&#34;){
 			//DEBUG print
 			/*println &#34;####&#34;
 			println &#34;VLAN Type -&#62; &#34; +vlanType
@@ -57,18 +80,89 @@ interfaceWalk.eachLine() {
 			array_vlans.push(vlanNumber); //add VLANS(s) to the array
 
 			//extract the actual VLAN descr. for ActiveDiscovery purposes
-			vlanDescr_OID=vlan_description+&#34;.&#34;+vlanNumber_raw
-			getVlan_descr= Snmp.get(deviceIP, snmpCommunity_raw, snmpVersion, vlanDescr_OID);
+			vlanDescr_OID=vlan_description+&#34;.&#34;+vlanNumber_raw //build the OID
+			getVlan_descr=snmp(op=&#34;get&#34;, snmpVersion, deviceIP, vlanDescr_OID, snmpCommunity, snmp_security, snmp_auth, snmp_authToken, snmp_priv, snmp_privToken, &#34;&#34;, &#34;&#34;, 3000);//get the value
 			array_vlans_descr.push(getVlan_descr); //add VLANS(s) descr. to the array
 		}
 }
 
 //iterate over the VLAN array &#38; output the AD instances
 array_vlans.eachWithIndex{it,index-&#62;
-    println it+&#34;##&#34;+&#34;Vlan &#34;+it+&#34;##&#34;+array_vlans_descr[index]; //output the Active Discovery result
+    try{
+		getVlan_TCN=snmp(op=&#34;get&#34;, snmpVersion, deviceIP, stpTCN, snmpCommunity, snmp_security, snmp_auth, snmp_authToken, snmp_priv, snmp_privToken, &#34;vlan-&#34;, it, 3000)
+        stp_data=true;
+    }catch(ex1){
+        stp_data=false;
+    }
+    
+    if(stp_data==true){
+        println it+&#34;##&#34;+&#34;Vlan &#34;+it+&#34;##&#34;+array_vlans_descr[index]; //output the Active Discovery result
+    }
 }
 
-return 0;</wildcardgroovyscript>
+return 0;
+
+//FUNCTIONS AREA
+
+//op - operation type GET/WALK (defaults to GET)
+//version - SNMP version (defaults to v2)
+//host - device we&#39;ll pool
+//oid - Actual OID to pool
+//community - SNMP community string (defaults to null) *v2 ONLY
+//snmp_security - security for the host (defaults to null) *v3 ONLY
+//snmp_auth - auth protocol (defaults to null) *v3 ONLY
+//snmp_authToken - authentication phrase/token (defaults to null) *v3 ONLY
+//snmp_priv - privacy protocol (defaults to null) *v3 ONLY
+//snmp_privToken - privacy phrase/token (defaults to null) *v3 ONLY
+//context_name - Name of the context (defaults to null) *v3 ONLY
+//param - additional param. that should be used within this function (to use SNMP with context for example)
+//timeout - timeout of the operation in MS (defaults to 3 seconds)
+def snmp(op=&#34;get&#34;, version=&#34;v2c&#34;, host, oid, community=&#34;&#34;, snmp_security=&#34;&#34;, snmp_auth=&#34;&#34;, snmp_authToken=&#34;&#34;, snmp_priv=&#34;&#34;, snmp_privToken=&#34;&#34;, context_name=&#34;&#34;, param=&#34;&#34;, timeout=3000) {
+	//check the version passed
+	if(version==&#34;v3&#34;){
+		//populate a hashmap of snmpv3 parameters as key/value pairs
+		snmp_options = new HashMap();
+		snmp_options.put(&#34;snmp.version&#34;,version);
+		snmp_options.put(&#34;snmp.security&#34;,snmp_security);
+		snmp_options.put(&#34;snmp.auth&#34;,snmp_auth);
+		snmp_options.put(&#34;snmp.authToken&#34;,snmp_authToken);
+		snmp_options.put(&#34;snmp.priv&#34;,snmp_priv);
+		snmp_options.put(&#34;snmp.privToken&#34;,snmp_privToken);
+		if(param != &#34;&#34;){
+			context=context_name+param
+			snmp_options.put(&#34;snmp.contextName&#34;,context);
+		}
+		
+		//determine the op. type
+		if(op==&#34;get&#34;){
+			snmpGet = new SNMPCollector()._convertTime(Snmp.get(host, oid, snmp_options, timeout));
+			//snmpGet = Snmp.get(host, oid, snmp_options, timeout);
+			return snmpGet;
+		}
+
+		if(op==&#34;walk&#34;){
+			snmpWalk = new SNMPCollector()._convertTime(Snmp.walk(host, oid, snmp_options, timeout));
+			//snmpWalk = Snmp.walk(host, oid, snmp_options, timeout);
+			return snmpWalk;
+		}
+	}
+
+	if(version==&#34;v2c&#34; || version==&#34;v1&#34;){
+		if(param != &#34;&#34;){
+			community=community+&#34;@&#34;+param
+		}
+
+		if(op==&#34;get&#34;){
+			snmpGet = new SNMPCollector()._convertTime(Snmp.get(host, community, version, oid));
+			return snmpGet;
+		}
+
+		if(op==&#34;walk&#34;){
+			snmpWalk = new SNMPCollector()._convertTime(Snmp.walk(host, community, version, oid));
+			return snmpWalk;
+		}
+	}
+}</wildcardgroovyscript>
         <wildcardschedule>60</wildcardschedule>
         <wildcarddisable>false</wildcarddisable>
         <wildcarddeleteinactive>false</wildcarddeleteinactive>
@@ -80,11 +174,12 @@ return 0;</wildcardgroovyscript>
 
 - BRIDGE-MIB (dot1dStpTimeSinceTopologyChange OID)
 - ciscoVtpMIB (vtpVlanEntry OID)
-
+----------------------------------------------------------------------------------------------------------------------------------------------------
 Compatible with:
 
-- Cisco devices (excluding WLCs)</technology>
-        <adlist><![CDATA[{"agdmethod":"none","method":"ad_script","agdparams":"","id":0,"filters":[],"params":{"type":"embeded","groovyscript":"import com.santaba.agent.groovyapi.expect.Expect;\r\nimport com.santaba.agent.groovyapi.snmp.Snmp;\r\nimport com.santaba.agent.groovyapi.http.*;\r\nimport com.santaba.agent.groovyapi.jmx.*;\r\nimport org.xbill.DNS.*;\r\nimport com.santaba.agent.groovyapi.snmp.Snmp;\r\n\r\n//array to store the interfaces\r\narray_vlans = [];\r\narray_vlans_descr = [];\r\n\r\n//OID variables\r\nstpTCN=\".1.3.6.1.2.1.17.2.3.0\" //get the actual TCN for the STP (for each VLAN)\r\nvlan_indexes = \".1.3.6.1.4.1.9.9.46.1.3.1.1.3\" //VLAN Type\r\nvlan_description = \".1.3.6.1.4.1.9.9.46.1.3.1.1.4\" //VLAN Name\r\n\r\n//device variables\r\ndeviceIP = hostProps.get(\"system.hostname\");\r\nsnmpCommunity_raw = hostProps.get(\"snmp.community\");\r\nsnmpVersion = hostProps.get(\"snmp.version\");\r\n\r\ninterfaceWalk = Snmp.walk(deviceIP, vlan_indexes)\r\ninterfaceWalk.eachLine() {\r\n\tline ->\r\n\t\tvlanType= line.minus(vlan_indexes + \".\").split(\" = \")[1] //get the content of the specific OID\r\n  \t\tvlanNumber_raw= line.minus(vlan_indexes + \".\").split(\" = \")[0] //get the actual extra OID portion that was added (since that's the actual VLAN ID)\r\n\t\tvlanNumber = vlanNumber_raw.replace(\"1.\", \"\"); //remove the WEIRD '1.' that get's added to the OID\r\n\r\n\t\tif(vlanType != \"1\"){\r\n\t\t\t//doNothing (since we only care about type==1 [ethernet])\r\n\t\t}else{\r\n\t\t\t//DEBUG print\r\n\t\t\t/*println \"####\"\r\n\t\t\tprintln \"VLAN Type -> \" +vlanType\r\n\t\t\tprintln \"VLAN Number -> \" +vlanNumber*/ \r\n\t\t\tarray_vlans.push(vlanNumber); //add VLANS(s) to the array\r\n\r\n\t\t\t//extract the actual VLAN descr. for ActiveDiscovery purposes\r\n\t\t\tvlanDescr_OID=vlan_description+\".\"+vlanNumber_raw\r\n\t\t\tgetVlan_descr= Snmp.get(deviceIP, snmpCommunity_raw, snmpVersion, vlanDescr_OID);\r\n\t\t\tarray_vlans_descr.push(getVlan_descr); //add VLANS(s) descr. to the array\r\n\t\t}\r\n}\r\n\r\n//iterate over the VLAN array & output the AD instances\r\narray_vlans.eachWithIndex{it,index->\r\n    println it+\"##\"+\"Vlan \"+it+\"##\"+array_vlans_descr[index]; //output the Active Discovery result\r\n}\r\n\r\nreturn 0;"}}]]></adlist>
+- Cisco devices (excluding WLCs)
+----------------------------------------------------------------------------------------------------------------------------------------------------</technology>
+        <adlist><![CDATA[{"agdmethod":"none","method":"ad_script","agdparams":"","id":0,"filters":[],"params":{"type":"embeded","groovyscript":"import com.santaba.agent.groovyapi.snmp.Snmp;\r\nimport com.santaba.agent.collector3.snmp.SNMPCollector;\r\n\r\n//array to store the interfaces\r\narray_vlans = [];\r\narray_vlans_descr = [];\r\n\r\n//OID variables\r\nstpTCN=\".1.3.6.1.2.1.17.2.3.0\" //get the actual TCN for the STP (for each VLAN)\r\nvlan_indexes = \".1.3.6.1.4.1.9.9.46.1.3.1.1.3\" //CISCO VLAN MIB\r\nvlan_description = \".1.3.6.1.4.1.9.9.46.1.3.1.1.4\" //VLAN Name/Descr\r\n\r\n//device variables\r\ndeviceIP = hostProps.get(\"system.hostname\");\r\nsnmpVersion = hostProps.get(\"snmp.version\");\r\n\r\nif(snmpVersion==\"v3\"){\r\n\tsnmp_auth = hostProps.get(\"snmp.auth\");\r\n\tsnmp_authToken = hostProps.get(\"snmp.authToken\");\r\n\tsnmp_priv = hostProps.get(\"snmp.priv\");\r\n\tsnmp_privToken = hostProps.get(\"snmp.privToken\");\r\n\tsnmp_security = hostProps.get(\"snmp.security\");\r\n\tsnmpCommunity = \"\"; //start this null\r\n}else{\r\n\tsnmpCommunity = hostProps.get(\"snmp.community\"); //retrieve SNMP community\r\n\tsnmp_auth = \"\"; //start this null\r\n\tsnmp_authToken = \"\"; //start this null\r\n\tsnmp_priv = \"\"; //start this null\r\n\tsnmp_privToken = \"\"; //start this null\r\n\tsnmp_security = \"\"; //start this null\r\n}\r\n\r\n//retrieve the VLAN(s) \r\nvlanWalk = snmp(\"walk\", snmpVersion, deviceIP, vlan_indexes, snmpCommunity, snmp_security, snmp_auth, snmp_authToken, snmp_priv, snmp_privToken, \"\", \"\", 3000)\r\n//iterate over the SNMP WALK\r\nvlanWalk.eachLine() {\r\n\tline ->\r\n\t\tvlanType= line.minus(vlan_indexes + \".\").split(\" = \")[1] //get the content of the specific OID\r\n\t\tvlanNumber_raw= line.minus(vlan_indexes + \".\").split(\" = \")[0] //get the actual extra OID portion that was added (since that's the actual VLAN ID)\r\n\t\tvlanNumber = vlanNumber_raw.replace(\"1.\", \"\"); //remove the WEIRD '1.' that get's added to the OID\r\n\r\n\t\t//we only care about type==1 [ethernet])\r\n\t\tif(vlanType == \"1\"){\r\n\t\t\t//DEBUG print\r\n\t\t\t/*println \"####\"\r\n\t\t\tprintln \"VLAN Type -> \" +vlanType\r\n\t\t\tprintln \"VLAN Number -> \" +vlanNumber*/ \r\n\t\t\tarray_vlans.push(vlanNumber); //add VLANS(s) to the array\r\n\r\n\t\t\t//extract the actual VLAN descr. for ActiveDiscovery purposes\r\n\t\t\tvlanDescr_OID=vlan_description+\".\"+vlanNumber_raw //build the OID\r\n\t\t\tgetVlan_descr=snmp(op=\"get\", snmpVersion, deviceIP, vlanDescr_OID, snmpCommunity, snmp_security, snmp_auth, snmp_authToken, snmp_priv, snmp_privToken, \"\", \"\", 3000);//get the value\r\n\t\t\tarray_vlans_descr.push(getVlan_descr); //add VLANS(s) descr. to the array\r\n\t\t}\r\n}\r\n\r\n//iterate over the VLAN array & output the AD instances\r\narray_vlans.eachWithIndex{it,index->\r\n    try{\r\n\t\tgetVlan_TCN=snmp(op=\"get\", snmpVersion, deviceIP, stpTCN, snmpCommunity, snmp_security, snmp_auth, snmp_authToken, snmp_priv, snmp_privToken, \"vlan-\", it, 3000)\r\n        stp_data=true;\r\n    }catch(ex1){\r\n        stp_data=false;\r\n    }\r\n    \r\n    if(stp_data==true){\r\n        println it+\"##\"+\"Vlan \"+it+\"##\"+array_vlans_descr[index]; //output the Active Discovery result\r\n    }\r\n}\r\n\r\nreturn 0;\r\n\r\n//FUNCTIONS AREA\r\n\r\n//op - operation type GET/WALK (defaults to GET)\r\n//version - SNMP version (defaults to v2)\r\n//host - device we'll pool\r\n//oid - Actual OID to pool\r\n//community - SNMP community string (defaults to null) *v2 ONLY\r\n//snmp_security - security for the host (defaults to null) *v3 ONLY\r\n//snmp_auth - auth protocol (defaults to null) *v3 ONLY\r\n//snmp_authToken - authentication phrase/token (defaults to null) *v3 ONLY\r\n//snmp_priv - privacy protocol (defaults to null) *v3 ONLY\r\n//snmp_privToken - privacy phrase/token (defaults to null) *v3 ONLY\r\n//context_name - Name of the context (defaults to null) *v3 ONLY\r\n//param - additional param. that should be used within this function (to use SNMP with context for example)\r\n//timeout - timeout of the operation in MS (defaults to 3 seconds)\r\ndef snmp(op=\"get\", version=\"v2c\", host, oid, community=\"\", snmp_security=\"\", snmp_auth=\"\", snmp_authToken=\"\", snmp_priv=\"\", snmp_privToken=\"\", context_name=\"\", param=\"\", timeout=3000) {\r\n\t//check the version passed\r\n\tif(version==\"v3\"){\r\n\t\t//populate a hashmap of snmpv3 parameters as key/value pairs\r\n\t\tsnmp_options = new HashMap();\r\n\t\tsnmp_options.put(\"snmp.version\",version);\r\n\t\tsnmp_options.put(\"snmp.security\",snmp_security);\r\n\t\tsnmp_options.put(\"snmp.auth\",snmp_auth);\r\n\t\tsnmp_options.put(\"snmp.authToken\",snmp_authToken);\r\n\t\tsnmp_options.put(\"snmp.priv\",snmp_priv);\r\n\t\tsnmp_options.put(\"snmp.privToken\",snmp_privToken);\r\n\t\tif(param != \"\"){\r\n\t\t\tcontext=context_name+param\r\n\t\t\tsnmp_options.put(\"snmp.contextName\",context);\r\n\t\t}\r\n\t\t\r\n\t\t//determine the op. type\r\n\t\tif(op==\"get\"){\r\n\t\t\tsnmpGet = new SNMPCollector()._convertTime(Snmp.get(host, oid, snmp_options, timeout));\r\n\t\t\t//snmpGet = Snmp.get(host, oid, snmp_options, timeout);\r\n\t\t\treturn snmpGet;\r\n\t\t}\r\n\r\n\t\tif(op==\"walk\"){\r\n\t\t\tsnmpWalk = new SNMPCollector()._convertTime(Snmp.walk(host, oid, snmp_options, timeout));\r\n\t\t\t//snmpWalk = Snmp.walk(host, oid, snmp_options, timeout);\r\n\t\t\treturn snmpWalk;\r\n\t\t}\r\n\t}\r\n\r\n\tif(version==\"v2c\" || version==\"v1\"){\r\n\t\tif(param != \"\"){\r\n\t\t\tcommunity=community+\"@\"+param\r\n\t\t}\r\n\r\n\t\tif(op==\"get\"){\r\n\t\t\tsnmpGet = new SNMPCollector()._convertTime(Snmp.get(host, community, version, oid));\r\n\t\t\treturn snmpGet;\r\n\t\t}\r\n\r\n\t\tif(op==\"walk\"){\r\n\t\t\tsnmpWalk = new SNMPCollector()._convertTime(Snmp.walk(host, community, version, oid));\r\n\t\t\treturn snmpWalk;\r\n\t\t}\r\n\t}\r\n}"}}]]></adlist>
         <schemaVersion>2</schemaVersion>
         <dataSourceType>1</dataSourceType>
         <attributes>
@@ -95,12 +190,8 @@ Compatible with:
         </attribute>
         <attribute>
             <name>scriptgroovy</name>
-            <value>import com.santaba.agent.groovyapi.expect.Expect;
-import com.santaba.agent.groovyapi.snmp.Snmp;
-import com.santaba.agent.groovyapi.http.*;
-import com.santaba.agent.groovyapi.jmx.*;
-import org.xbill.DNS.*;
-import com.santaba.agent.groovyapi.snmp.Snmp;
+            <value>import com.santaba.agent.groovyapi.snmp.Snmp;
+import com.santaba.agent.collector3.snmp.SNMPCollector;
 
 //array to store the interfaces
 array_vlans = [];
@@ -111,19 +202,35 @@ vlan_indexes = &#34;.1.3.6.1.4.1.9.9.46.1.3.1.1.3&#34; //CISCO VLAN MIB
 
 //device variables
 deviceIP = hostProps.get(&#34;system.hostname&#34;);
-snmpCommunity_raw = hostProps.get(&#34;snmp.community&#34;);
 snmpVersion = hostProps.get(&#34;snmp.version&#34;);
 
-interfaceWalk = Snmp.walk(deviceIP, vlan_indexes)
-interfaceWalk.eachLine() {
+if(snmpVersion==&#34;v3&#34;){
+	snmp_auth = hostProps.get(&#34;snmp.auth&#34;);
+	snmp_authToken = hostProps.get(&#34;snmp.authToken&#34;);
+	snmp_priv = hostProps.get(&#34;snmp.priv&#34;);
+	snmp_privToken = hostProps.get(&#34;snmp.privToken&#34;);
+	snmp_security = hostProps.get(&#34;snmp.security&#34;);
+	snmpCommunity = &#34;&#34;; //start this null
+}else{
+	snmpCommunity = hostProps.get(&#34;snmp.community&#34;); //retrieve SNMP community
+	snmp_auth = &#34;&#34;; //start this null
+	snmp_authToken = &#34;&#34;; //start this null
+	snmp_priv = &#34;&#34;; //start this null
+	snmp_privToken = &#34;&#34;; //start this null
+	snmp_security = &#34;&#34;; //start this null
+}
+
+//retrieve the VLAN(s) 
+vlanWalk = snmp(&#34;walk&#34;, snmpVersion, deviceIP, vlan_indexes, snmpCommunity, snmp_security, snmp_auth, snmp_authToken, snmp_priv, snmp_privToken, &#34;&#34;, &#34;&#34;, 3000)
+//iterate over the SNMP WALK
+vlanWalk.eachLine() {
 	line -&#62;
 		vlanType= line.minus(vlan_indexes + &#34;.&#34;).split(&#34; = &#34;)[1] //get the content of the specific OID
-  		vlanNumber_raw= line.minus(vlan_indexes + &#34;.&#34;).split(&#34; = &#34;)[0] //get the actual extra OID portion that was added (since that&#39;s the actual VLAN ID)
+		vlanNumber_raw= line.minus(vlan_indexes + &#34;.&#34;).split(&#34; = &#34;)[0] //get the actual extra OID portion that was added (since that&#39;s the actual VLAN ID)
 		vlanNumber = vlanNumber_raw.replace(&#34;1.&#34;, &#34;&#34;); //remove the WEIRD &#39;1.&#39; that get&#39;s added to the OID
 
-		if(vlanType != &#34;1&#34;){
-			//doNothing (since we only care about type==1 [ethernet])
-		}else{
+		//we only care about type==1 [ethernet])
+		if(vlanType == &#34;1&#34;){
 			//DEBUG print
 			/*println &#34;####&#34;
 			println &#34;VLAN Type -&#62; &#34; +vlanType
@@ -134,13 +241,73 @@ interfaceWalk.eachLine() {
 
 //iterate over the VLAN array &#38; do the SNMP GET per vlan (to retrieve the TopologyChange metric)
 array_vlans.each(){
-	vlanID=it
-	snmpCommunity=snmpCommunity_raw+&#34;@&#34;+vlanID
-	getVlan_TCN= Snmp.get(deviceIP, snmpCommunity, snmpVersion, stpTCN);
-	println vlanID+&#34;.LastTopologyChange=&#34;+getVlan_TCN
+	getVlan_TCN=snmp(op=&#34;get&#34;, snmpVersion, deviceIP, stpTCN, snmpCommunity, snmp_security, snmp_auth, snmp_authToken, snmp_priv, snmp_privToken, &#34;vlan-&#34;, it, 3000)
+	println it+&#34;.LastTopologyChange=&#34;+getVlan_TCN
 }
 
-return 0;</value>
+return 0;
+
+//FUNCTIONS AREA
+
+//op - operation type GET/WALK (defaults to GET)
+//version - SNMP version (defaults to v2)
+//host - device we&#39;ll pool
+//oid - Actual OID to pool
+//community - SNMP community string (defaults to null) *v2 ONLY
+//snmp_security - security for the host (defaults to null) *v3 ONLY
+//snmp_auth - auth protocol (defaults to null) *v3 ONLY
+//snmp_authToken - authentication phrase/token (defaults to null) *v3 ONLY
+//snmp_priv - privacy protocol (defaults to null) *v3 ONLY
+//snmp_privToken - privacy phrase/token (defaults to null) *v3 ONLY
+//context_name - Name of the context (defaults to null) *v3 ONLY
+//param - additional param. that should be used within this function (to use SNMP with context for example)
+//timeout - timeout of the operation in MS (defaults to 3 seconds)
+def snmp(op=&#34;get&#34;, version=&#34;v2c&#34;, host, oid, community=&#34;&#34;, snmp_security=&#34;&#34;, snmp_auth=&#34;&#34;, snmp_authToken=&#34;&#34;, snmp_priv=&#34;&#34;, snmp_privToken=&#34;&#34;, context_name=&#34;&#34;, param=&#34;&#34;, timeout=3000) {
+	//check the version passed
+	if(version==&#34;v3&#34;){
+		//populate a hashmap of snmpv3 parameters as key/value pairs
+		snmp_options = new HashMap();
+		snmp_options.put(&#34;snmp.version&#34;,version);
+		snmp_options.put(&#34;snmp.security&#34;,snmp_security);
+		snmp_options.put(&#34;snmp.auth&#34;,snmp_auth);
+		snmp_options.put(&#34;snmp.authToken&#34;,snmp_authToken);
+		snmp_options.put(&#34;snmp.priv&#34;,snmp_priv);
+		snmp_options.put(&#34;snmp.privToken&#34;,snmp_privToken);
+		if(param != &#34;&#34;){
+			context=context_name+param
+			snmp_options.put(&#34;snmp.contextName&#34;,context);
+		}
+		
+		//determine the op. type
+		if(op==&#34;get&#34;){
+			snmpGet = new SNMPCollector()._convertTime(Snmp.get(host, oid, snmp_options, timeout));
+			//snmpGet = Snmp.get(host, oid, snmp_options, timeout);
+			return snmpGet;
+		}
+
+		if(op==&#34;walk&#34;){
+			snmpWalk = new SNMPCollector()._convertTime(Snmp.walk(host, oid, snmp_options, timeout));
+			//snmpWalk = Snmp.walk(host, oid, snmp_options, timeout);
+			return snmpWalk;
+		}
+	}
+
+	if(version==&#34;v2c&#34; || version==&#34;v1&#34;){
+		if(param != &#34;&#34;){
+			community=community+&#34;@&#34;+param
+		}
+
+		if(op==&#34;get&#34;){
+			snmpGet = new SNMPCollector()._convertTime(Snmp.get(host, community, version, oid));
+			return snmpGet;
+		}
+
+		if(op==&#34;walk&#34;){
+			snmpWalk = new SNMPCollector()._convertTime(Snmp.walk(host, community, version, oid));
+			return snmpWalk;
+		}
+	}
+}</value>
             <comment></comment>
         </attribute>
         <attribute>
@@ -166,7 +333,7 @@ return 0;</value>
         </attributes>
         <datapoints>
         <datapoint>
-            <name>elapsedTimeTicks</name>
+            <name>lastTCN_TimeTicks</name>
             <dataType>7</dataType>
             <type>2</type>
             <postprocessormethod>namevalue</postprocessormethod>
@@ -193,11 +360,11 @@ return 0;</value>
             <alertClearTransitionIval>0</alertClearTransitionIval>
         </datapoint>
         <datapoint>
-            <name>elapsedSeconds</name>
+            <name>lastTCN_Days</name>
             <dataType>7</dataType>
             <type>2</type>
             <postprocessormethod>expression</postprocessormethod>
-            <postprocessorparam>elapsedTimeTicks / 100</postprocessorparam>
+            <postprocessorparam>lastTCN_Hours/24</postprocessorparam>
             <usevalue></usevalue>
             <alertexpr></alertexpr>
             <alertmissing>1</alertmissing>
@@ -219,10 +386,239 @@ return 0;</value>
             <alertTransitionIval>0</alertTransitionIval>
             <alertClearTransitionIval>0</alertClearTransitionIval>
         </datapoint>
+        <datapoint>
+            <name>lastTCN_Hours</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>lastTCN_Minutes/60</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description></description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>lastTCN_Minutes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>lastTCN_Seconds/60</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description></description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>lastTCN_Seconds</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>lastTCN_TimeTicks/100</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr>&#60; 450</alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody>STP topology change detected on ##INSTANCE## - ##DSIDESCRIPTION## at ##HOST##. It has gone down ##VALUE## second(s) ago, placing the device into ##LEVEL## state.
+
+This started at ##START##, -- or ##DURATION## ago.</alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description></description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
         </datapoints>
         <graphs>
+        <graph>
+            <name>Last topology change</name>
+            <title>Last topology change - ##INSTANCE##</title>
+            <verticallabel>Time</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>1</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>lastTCN_Days</name>
+            <datapointname>lastTCN_Days</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>lastTCN_Hours</name>
+            <datapointname>lastTCN_Hours</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>lastTCN_Minutes</name>
+            <datapointname>lastTCN_Minutes</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>Minutes</legend>
+                <color>silver</color>
+                <datapointname>lastTCN_Minutes</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Hours</legend>
+                <color>green</color>
+                <datapointname>lastTCN_Hours</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Days</legend>
+                <color>red</color>
+                <datapointname>lastTCN_Days</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
         </graphs>
         <overviewgraphs>
+        <overviewgraph>
+            <name>Last topology change (days)</name>
+            <title>Last topology change (days)</title>
+            <verticallabel>Days</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>1</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>lastTCN_Days</name>
+            <datapointname>lastTCN_Days</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE##</legend>
+                <datapointname>lastTCN_Days</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
+        <overviewgraph>
+            <name>Last topology change (hours)</name>
+            <title>Last topology change (hours)</title>
+            <verticallabel>Hours</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>1</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>lastTCN_Hours</name>
+            <datapointname>lastTCN_Hours</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE##</legend>
+                <datapointname>lastTCN_Hours</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
+        <overviewgraph>
+            <name>Last topology change (minutes)</name>
+            <title>Last topology change (minutes)</title>
+            <verticallabel>Minutes</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>1</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>lastTCN_Minutes</name>
+            <datapointname>lastTCN_Minutes</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE##</legend>
+                <datapointname>lastTCN_Minutes</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
         </overviewgraphs>
         <scripts>
         </scripts>
