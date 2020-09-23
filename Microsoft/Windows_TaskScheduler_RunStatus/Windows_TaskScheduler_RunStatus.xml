@@ -5,7 +5,7 @@
   <errmsg>OK</errmsg>
   <interval>0</interval>
     <entry type="predatasource">
-        <version>1600884614</version>
+        <version>1600885133</version>
         <name>Windows_TaskScheduler_RunStatus</name>
         <displayedas>Task(s) Run Status</displayedas>
         <description>Retrieve the Scheduled Task(s) that aren&#39;t &#39;Disabled&#39;:
@@ -93,10 +93,10 @@ Exit 0;</wildcardgroovyscript>
         </attribute>
         <attribute>
             <name>scriptgroovy</name>
-            <value>$accessId = &#34;wEAALnM59V4Mq4ZIubWy&#34; 
-$accessKey = &#34;-I+Ia]K~58vG+rQEp59pr^qHf-MXV4ey4VX--}zj&#34;
-$company = &#34;alphaserveit&#34;
-$deviceId = 1051
+            <value>$accessId = &#34;##api.user##&#34; 
+$accessKey = &#34;##api.pass##&#34;
+$company = &#34;##api.account##&#34;
+$deviceId = &#34;##system.deviceId##&#34;
 
 # FUNCTION AREA
 function SpecialCharacterCheck() {

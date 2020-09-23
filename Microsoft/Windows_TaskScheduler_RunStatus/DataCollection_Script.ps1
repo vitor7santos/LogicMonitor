@@ -1,7 +1,7 @@
-$accessId = "wEAALnM59V4Mq4ZIubWy" 
-$accessKey = "-I+Ia]K~58vG+rQEp59pr^qHf-MXV4ey4VX--}zj"
-$company = "alphaserveit"
-$deviceId = 1051
+$accessId = "##api.user##" 
+$accessKey = "##api.pass##"
+$company = "##api.account##"
+$deviceId = "##system.deviceId##"
 
 # FUNCTION AREA
 function SpecialCharacterCheck() {
