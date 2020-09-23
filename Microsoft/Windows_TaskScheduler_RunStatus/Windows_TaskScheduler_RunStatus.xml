@@ -5,7 +5,7 @@
   <errmsg>OK</errmsg>
   <interval>0</interval>
     <entry type="predatasource">
-        <version>1600860858</version>
+        <version>1600884614</version>
         <name>Windows_TaskScheduler_RunStatus</name>
         <displayedas>Task(s) Run Status</displayedas>
         <description>Retrieve the Scheduled Task(s) that aren&#39;t &#39;Disabled&#39;:
@@ -61,17 +61,16 @@ function SpecialCharacterCheck() {
 # END FUNCTION AREA
 
 # get scheuled task(s) that aren&#39;t Disabled
-$get_tasks = Get-ScheduledTask | Where State -ne &#34;Disabled&#34; | Select TaskName,Description,TaskPath
+$get_tasks = Get-ScheduledTask | Where State -ne &#34;Disabled&#34; | Select TaskName,TaskPath
 
 # iterate the results &#38; output those
 foreach ($task in $get_tasks) {
     $task_name = $task.TaskName
-    $task_description = $task.Description
 	$task_path = $task.TaskPath
 	$wildvalue = SpecialCharacterCheck($task_name)
 
 	# output data
-	write &#34;${wildvalue}##${task_name}##${task_description}####auto.TaskPath=${task_path}&#34;
+	write &#34;${wildvalue}##${task_name}######auto.TaskPath=${task_path}&#34;
 }
 
 Exit 0;</wildcardgroovyscript>
@@ -83,7 +82,7 @@ Exit 0;</wildcardgroovyscript>
         <group>Windows Task Scheduler</group>
         <tags></tags>
         <technology></technology>
-        <adlist><![CDATA[{"agdmethod":"ilp","method":"ad_script","agdparams":"auto.TaskPath","id":0,"filters":[{"attribute":"##WILDVALUE##","operation":"NotEqual","value":"TaskNameHere"}],"params":{"type":"powerShell","groovyscript":"# FUNCTION AREA\r\nfunction SpecialCharacterCheck() {\r\n\t# According to LM the Wildvalue(s) can't contain several characters\r\n\t# -> https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery\r\n\t# Replacing  ['=',':','\\','#','space'] characters\r\n\r\n    Param(\r\n        [Parameter(position = 0, Mandatory = $true)]\r\n        [string]$wildvalue\r\n    )\r\n    #iterate through the $password in order to find possible reserved characters\r\n    #WIKI -> https://tools.ietf.org/html/rfc3986#section-2.2\r\n    if ($wildvalue -match '\\='){\r\n        #replace the '@' for its actual encoding representation\r\n        $wildvalue = $wildvalue -replace '\\=', ''\r\n    }\r\n    if ($wildvalue -match '\\:'){\r\n        #replace the '@' for its actual encoding representation\r\n        $wildvalue = $wildvalue -replace '\\:', ''\r\n    }\r\n    if ($wildvalue -match '\\\\'){\r\n        #replace the '@' for its actual encoding representation\r\n        $wildvalue = $wildvalue -replace '\\\\', ''\r\n    }\r\n    if ($wildvalue -match '\\#'){\r\n        #replace the '@' for its actual encoding representation\r\n        $wildvalue = $wildvalue -replace '\\#', ''\r\n    }\r\n    if ($wildvalue -match '\\ '){\r\n        #replace the '@' for its actual encoding representation\r\n        $wildvalue = $wildvalue -replace '\\ ', ''\r\n    }\r\n    if ($wildvalue -match '\\.'){\r\n        #replace the '@' for its actual encoding representation\r\n        $wildvalue = $wildvalue -replace '\\.', ''\r\n    }\r\n\tReturn $wildvalue\r\n}\r\n# END FUNCTION AREA\r\n\r\n# get scheuled task(s) that aren't Disabled\r\n$get_tasks = Get-ScheduledTask | Where State -ne \"Disabled\" | Select TaskName,Description,TaskPath\r\n\r\n# iterate the results & output those\r\nforeach ($task in $get_tasks) {\r\n    $task_name = $task.TaskName\r\n    $task_description = $task.Description\r\n\t$task_path = $task.TaskPath\r\n\t$wildvalue = SpecialCharacterCheck($task_name)\r\n\r\n\t# output data\r\n\twrite \"${wildvalue}##${task_name}##${task_description}####auto.TaskPath=${task_path}\"\r\n}\r\n\r\nExit 0;"}}]]></adlist>
+        <adlist><![CDATA[{"agdmethod":"ilp","method":"ad_script","agdparams":"auto.TaskPath","id":0,"filters":[{"attribute":"##WILDVALUE##","operation":"NotEqual","value":"TaskNameHere"}],"params":{"type":"powerShell","groovyscript":"# FUNCTION AREA\r\nfunction SpecialCharacterCheck() {\r\n\t# According to LM the Wildvalue(s) can't contain several characters\r\n\t# -> https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery\r\n\t# Replacing  ['=',':','\\','#','space'] characters\r\n\r\n    Param(\r\n        [Parameter(position = 0, Mandatory = $true)]\r\n        [string]$wildvalue\r\n    )\r\n    #iterate through the $password in order to find possible reserved characters\r\n    #WIKI -> https://tools.ietf.org/html/rfc3986#section-2.2\r\n    if ($wildvalue -match '\\='){\r\n        #replace the '@' for its actual encoding representation\r\n        $wildvalue = $wildvalue -replace '\\=', ''\r\n    }\r\n    if ($wildvalue -match '\\:'){\r\n        #replace the '@' for its actual encoding representation\r\n        $wildvalue = $wildvalue -replace '\\:', ''\r\n    }\r\n    if ($wildvalue -match '\\\\'){\r\n        #replace the '@' for its actual encoding representation\r\n        $wildvalue = $wildvalue -replace '\\\\', ''\r\n    }\r\n    if ($wildvalue -match '\\#'){\r\n        #replace the '@' for its actual encoding representation\r\n        $wildvalue = $wildvalue -replace '\\#', ''\r\n    }\r\n    if ($wildvalue -match '\\ '){\r\n        #replace the '@' for its actual encoding representation\r\n        $wildvalue = $wildvalue -replace '\\ ', ''\r\n    }\r\n    if ($wildvalue -match '\\.'){\r\n        #replace the '@' for its actual encoding representation\r\n        $wildvalue = $wildvalue -replace '\\.', ''\r\n    }\r\n\tReturn $wildvalue\r\n}\r\n# END FUNCTION AREA\r\n\r\n# get scheuled task(s) that aren't Disabled\r\n$get_tasks = Get-ScheduledTask | Where State -ne \"Disabled\" | Select TaskName,TaskPath\r\n\r\n# iterate the results & output those\r\nforeach ($task in $get_tasks) {\r\n    $task_name = $task.TaskName\r\n\t$task_path = $task.TaskPath\r\n\t$wildvalue = SpecialCharacterCheck($task_name)\r\n\r\n\t# output data\r\n\twrite \"${wildvalue}##${task_name}######auto.TaskPath=${task_path}\"\r\n}\r\n\r\nExit 0;"}}]]></adlist>
         <schemaVersion>2</schemaVersion>
         <dataSourceType>1</dataSourceType>
         <attributes>
@@ -94,7 +93,12 @@ Exit 0;</wildcardgroovyscript>
         </attribute>
         <attribute>
             <name>scriptgroovy</name>
-            <value># FUNCTION AREA
+            <value>$accessId = &#34;wEAALnM59V4Mq4ZIubWy&#34; 
+$accessKey = &#34;-I+Ia]K~58vG+rQEp59pr^qHf-MXV4ey4VX--}zj&#34;
+$company = &#34;alphaserveit&#34;
+$deviceId = 1051
+
+# FUNCTION AREA
 function SpecialCharacterCheck() {
 	# According to LM the Wildvalue(s) can&#39;t contain several characters
 	# -&#62; https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery
@@ -132,7 +136,85 @@ function SpecialCharacterCheck() {
     }
 	Return $wildvalue
 }
+
+function Send-Request() {
+    Param(
+        [Parameter(position = 0, Mandatory = $true)]
+        [string]$path,
+        [Parameter(position = 1, Mandatory = $false)]
+        [string]$httpVerb = &#39;GET&#39;,
+        [Parameter(position = 2, Mandatory = $false)]
+        [string]$queryParams,
+        [Parameter(position = 3, Mandatory = $false)]
+        [PSObject]$data
+    )
+    # Use TLS 1.2
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    &#60;# Construct URL #&#62;
+    $url = &#34;https://$company.logicmonitor.com/santaba/rest$path$queryParams&#34;
+    &#60;# Get current time in milliseconds #&#62;
+    $epoch = [Math]::Round((New-TimeSpan -start (Get-Date -Date &#34;1/1/1970&#34;) -end (Get-Date).ToUniversalTime()).TotalMilliseconds)
+    &#60;# Concatenate Request Details #&#62;
+    $requestVars = $httpVerb + $epoch + $data + $path
+    &#60;# Construct Signature #&#62;
+    $hmac = New-Object System.Security.Cryptography.HMACSHA256
+    $hmac.Key = [Text.Encoding]::UTF8.GetBytes($accessKey)
+    $signatureBytes = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($requestVars))
+    $signatureHex = [System.BitConverter]::ToString($signatureBytes) -replace &#39;-&#39;
+    $signature = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($signatureHex.ToLower()))
+    &#60;# Construct Headers #&#62;
+    $auth = &#39;LMv1 &#39; + $accessId + &#39;:&#39; + $signature + &#39;:&#39; + $epoch
+    $headers = New-Object &#34;System.Collections.Generic.Dictionary[[String],[String]]&#34;
+    $headers.Add(&#34;Authorization&#34;, $auth)
+    $headers.Add(&#34;Content-Type&#34;, &#39;application/json&#39;)
+    $headers.Add(&#34;X-version&#34;, &#39;2&#39;)
+    &#60;# Make request &#38; retry if failed due to rate limiting #&#62;
+    $Stoploop = $false
+    do {
+        try {
+            &#60;# Make Request #&#62;
+            $response = Invoke-RestMethod -Uri $url -Method $httpVerb -Body $data -Header $headers
+            $Stoploop = $true
+        } catch {
+            switch ($_) {
+                { $_.Exception.Response.StatusCode.value__ -eq 429 } {
+                    Write-Host &#34;Request exceeded rate limit, retrying in 60 seconds...&#34;
+                    Start-Sleep -Seconds 60
+                    $response = Invoke-RestMethod -Uri $url -Method $httpVerb -Body $data -Header $headers
+                }
+                { $_.Exception.Response.StatusCode.value__ } {
+                    Write-Host &#34;Request failed, not as a result of rate limiting&#34;
+                    # Dig into the exception to get the Response details.
+                    # Note that value__ is not a typo.
+                    Write-Host &#34;StatusCode:&#34; $_.Exception.Response.StatusCode.value__
+                    Write-Host &#34;StatusDescription:&#34; $_.Exception.Response.StatusCode
+                    $_.ErrorDetails.Message -match &#39;{&#34;errorMessage&#34;:&#34;([\d\S\s]+)&#34;,&#34;errorCode&#34;:(\d+),&#39;
+                    Write-Host &#34;LM ErrorMessage&#34; $matches[1]
+                    Write-Host &#34;LM ErrorCode&#34; $matches[2]
+                    $response = $null
+                    $Stoploop = $true
+                }
+                default {
+                    Write-Host &#34;An Unknown Exception occurred:&#34;
+                    Write-Host $_ | Format-List -Force
+                $response = $null
+                $Stoploop = $true
+            }
+        }
+    }
+} While ($Stoploop -eq $false)
+Return $response
+}
 # END FUNCTION AREA
+
+# get DataSource ID (at the device level)
+$httpVerb = &#39;GET&#39;
+$resourcePath = &#39;/device/devices/&#39;+$deviceId+&#39;/devicedatasources&#39;
+$queryParams = &#39;?filter=instanceNumber&#62;0,dataSourceName~&#34;Windows_TaskScheduler_RunStatus_BETA&#34;&#39;
+$data = &#39;&#39;
+$request = Send-Request $resourcePath $httpVerb $queryParams
+
+$ds_id = $request.items.id # store datasource ID in a variable
 
 # get scheuled task(s) that aren&#39;t Disabled
 $get_tasks = Get-ScheduledTask | Where State -ne &#34;Disabled&#34; | Select TaskName,TaskPath
@@ -150,8 +232,29 @@ foreach ($task in $get_tasks) {
 
 	# iterate through task details &#38; output the value(s)
 	foreach ($task_detail in $get_taskDetails){
-		$task_LastResult = $task_detail.LastTaskResult
+		$task_LastResult = $task_detail.LastTaskResult # this is returning in Decimal
+		$task_LastResult_hexRaw = ($task_LastResult).ToString(&#39;x&#39;) # convert into HEX
+        $task_LastResult_hex = &#34;0x&#34;+$task_LastResult_hexRaw.ToUpper() # add 0x prefix (to look like the actual error code)
 		$task_NumberOfMissedRuns = $task_detail.NumberOfMissedRuns
+
+		# get instanceID
+		$httpVerb = &#39;GET&#39;
+		$resourcePath = &#39;/device/devices/&#39;+$deviceId+&#39;/devicedatasources/&#39;+$ds_id+&#39;/instances&#39;
+		$queryParams = &#39;?filter=wildValue:&#34;&#39;+$wildvalue+&#39;&#34;&#38;fields=id,wildValue,displayName,groupId,wildValue,customProperties&#39;
+		$data = &#39;&#39;
+		$request = Send-Request $resourcePath $httpVerb $queryParams
+
+		$ds_instanceId = $request.items.id # store instanceID in a variable
+		$ds_instanceDisplayName = $request.items.displayName # store displayName (to use in the PUT request)
+		$ds_instanceGroupId = $request.items.groupId # store groupId (to use in the PUT request)
+		$ds_instanceWildValue = $request.items.wildValue # store wildValue (to use in the PUT request)
+
+		# update Properties in the instance level
+		$httpVerb = &#39;PUT&#39;
+		$resourcePath = &#39;/device/devices/&#39;+$deviceId+&#39;/devicedatasources/&#39;+$ds_id+&#39;/instances/&#39;+$ds_instanceId
+		$queryParams = &#39;&#39;
+		$data = &#39;{&#34;wildValue&#34;:&#34;&#39; + $ds_instanceWildValue + &#39;&#34;,&#34;groupId&#34;:&#39;+$ds_instanceGroupId+&#39;,&#34;displayName&#34;:&#34;&#39;+$ds_instanceDisplayName+&#39;&#34;,&#34;customProperties&#34;: [{&#34;name&#34;:&#34;TaskLastResult&#34;, &#34;value&#34;:&#34;&#39;+$task_LastResult_hex+&#39;&#34;}]}&#39;
+		$request = Send-Request $resourcePath $httpVerb $queryParams $data
 
 		# output the results
 		write &#34;${wildvalue}.LastTaskResult=${task_LastResult}&#34;
@@ -199,7 +302,11 @@ Exit 0;</value>
             <alertexpr></alertexpr>
             <alertmissing>1</alertmissing>
             <alertsubject></alertsubject>
-            <alertbody></alertbody>
+            <alertbody>Schedule Task &#39;##INSTANCE##&#39; on ##HOSTNAME## didn&#39;t ran successfully.
+
+ExitCode -&#62; ##TaskLastResult##
+
+This started at ##START## - or ##DURATION## ago.</alertbody>
             <enableanomalyalertsuppression></enableanomalyalertsuppression>
             <adadvsettingenabled>false</adadvsettingenabled>
             <warnadadvsetting></warnadadvsetting>
@@ -248,128 +355,8 @@ Exit 0;</value>
         </datapoint>
         </datapoints>
         <graphs>
-        <graph>
-            <name>TaskExitCode</name>
-            <title>Task Exit Code</title>
-            <verticallabel>Exit Code</verticallabel>
-            <rigid>false</rigid>
-            <maxvalue>NaN</maxvalue>
-            <minvalue>0.0</minvalue>
-            <displayprio>1</displayprio>
-            <timescale>1day</timescale>
-            <base1024>false</base1024>
-            <graphdatapoints>
-        <graphdatapoint>
-            <name>LastTaskResult</name>
-            <datapointname>LastTaskResult</datapointname>
-            <cf>1</cf>
-        </graphdatapoint>
-            </graphdatapoints>
-            <graphvirtualdatapoints>
-            </graphvirtualdatapoints>
-            <graphdatas>
-            <graphdata>
-                <type>1</type>
-                <legend>LastTaskResult</legend>
-                <color>olive</color>
-                <datapointname>LastTaskResult</datapointname>
-                <isvirtualdatapoint>false</isvirtualdatapoint>
-            </graphdata>
-            </graphdatas>
-        </graph>
-        <graph>
-            <name>TaskMissedRuns</name>
-            <title>Missed Runs</title>
-            <verticallabel>Missed Run(s)</verticallabel>
-            <rigid>false</rigid>
-            <maxvalue>NaN</maxvalue>
-            <minvalue>0.0</minvalue>
-            <displayprio>1</displayprio>
-            <timescale>1day</timescale>
-            <base1024>false</base1024>
-            <graphdatapoints>
-        <graphdatapoint>
-            <name>NumberOfMissedRuns</name>
-            <datapointname>NumberOfMissedRuns</datapointname>
-            <cf>1</cf>
-        </graphdatapoint>
-            </graphdatapoints>
-            <graphvirtualdatapoints>
-            </graphvirtualdatapoints>
-            <graphdatas>
-            <graphdata>
-                <type>1</type>
-                <legend>Missed Runs</legend>
-                <color>silver</color>
-                <datapointname>NumberOfMissedRuns</datapointname>
-                <isvirtualdatapoint>false</isvirtualdatapoint>
-            </graphdata>
-            </graphdatas>
-        </graph>
         </graphs>
         <overviewgraphs>
-        <overviewgraph>
-            <name>TaskExitCode</name>
-            <title>Task Exit Code</title>
-            <verticallabel>ExitCode</verticallabel>
-            <rigid>false</rigid>
-            <maxvalue>NaN</maxvalue>
-            <minvalue>0.0</minvalue>
-            <displayprio>1</displayprio>
-            <timescale>1day</timescale>
-            <base1024>false</base1024>
-            <aggregated>false</aggregated>
-            <datapoints>
-        <overviewgraphdatapoint>
-            <name>LastTaskResult</name>
-            <datapointname>LastTaskResult</datapointname>
-            <cf>1</cf>
-            <aggregateMethod>sum</aggregateMethod>
-        </overviewgraphdatapoint>
-            </datapoints>
-            <virtualdatapoints>
-            </virtualdatapoints>
-            <lines>
-            <overviewgraphline>
-                <type>1</type>
-                <legend>##INSTANCE##</legend>
-                <datapointname>LastTaskResult</datapointname>
-                <isvirtualdatapoint>false</isvirtualdatapoint>
-                <color>silver</color>
-            </overviewgraphline>
-            </lines>
-        </overviewgraph>
-        <overviewgraph>
-            <name>TaskMissedRuns</name>
-            <title>Missed Runs</title>
-            <verticallabel>Missed Run(s)</verticallabel>
-            <rigid>false</rigid>
-            <maxvalue>NaN</maxvalue>
-            <minvalue>0.0</minvalue>
-            <displayprio>1</displayprio>
-            <timescale>1day</timescale>
-            <base1024>false</base1024>
-            <aggregated>false</aggregated>
-            <datapoints>
-        <overviewgraphdatapoint>
-            <name>NumberOfMissedRuns</name>
-            <datapointname>NumberOfMissedRuns</datapointname>
-            <cf>1</cf>
-            <aggregateMethod>sum</aggregateMethod>
-        </overviewgraphdatapoint>
-            </datapoints>
-            <virtualdatapoints>
-            </virtualdatapoints>
-            <lines>
-            <overviewgraphline>
-                <type>1</type>
-                <legend>##INSTANCE##</legend>
-                <datapointname>NumberOfMissedRuns</datapointname>
-                <isvirtualdatapoint>false</isvirtualdatapoint>
-                <color>silver</color>
-            </overviewgraphline>
-            </lines>
-        </overviewgraph>
         </overviewgraphs>
         <scripts>
         </scripts>
