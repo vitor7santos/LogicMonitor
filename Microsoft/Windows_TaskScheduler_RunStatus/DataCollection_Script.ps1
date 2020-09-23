@@ -115,7 +115,7 @@ Return $response
 # get DataSource ID (at the device level)
 $httpVerb = 'GET'
 $resourcePath = '/device/devices/'+$deviceId+'/devicedatasources'
-$queryParams = '?filter=instanceNumber>0,dataSourceName~"Windows_TaskScheduler_RunStatus_BETA"'
+$queryParams = '?filter=instanceNumber>0,dataSourceName~"Windows_TaskScheduler_RunStatus"'
 $data = ''
 $request = Send-Request $resourcePath $httpVerb $queryParams
 

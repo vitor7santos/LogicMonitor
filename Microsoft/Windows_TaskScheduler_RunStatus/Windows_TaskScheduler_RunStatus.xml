@@ -5,7 +5,7 @@
   <errmsg>OK</errmsg>
   <interval>0</interval>
     <entry type="predatasource">
-        <version>1600885133</version>
+        <version>1600885544</version>
         <name>Windows_TaskScheduler_RunStatus</name>
         <displayedas>Task(s) Run Status</displayedas>
         <description>Retrieve the Scheduled Task(s) that aren&#39;t &#39;Disabled&#39;:
@@ -210,7 +210,7 @@ Return $response
 # get DataSource ID (at the device level)
 $httpVerb = &#39;GET&#39;
 $resourcePath = &#39;/device/devices/&#39;+$deviceId+&#39;/devicedatasources&#39;
-$queryParams = &#39;?filter=instanceNumber&#62;0,dataSourceName~&#34;Windows_TaskScheduler_RunStatus_BETA&#34;&#39;
+$queryParams = &#39;?filter=instanceNumber&#62;0,dataSourceName~&#34;Windows_TaskScheduler_RunStatus&#34;&#39;
 $data = &#39;&#39;
 $request = Send-Request $resourcePath $httpVerb $queryParams
 
