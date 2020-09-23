@@ -1,7 +1,7 @@
 ### - Windows_TaskScheduler_RunStatus (DataSource)
 
-> Retrieve the list of Scheduled Tasks that aren't in 'Disabled' state
-> Groups instance automatically by the actual task folder (using auto.TaskPath property)
+> Retrieve the list of Scheduled Tasks that aren't in 'Disabled' state.
+> Groups instance automatically by the actual task folder (using auto.TaskPath property).
 - Filter(s) can be used to grab only specific tasks and/or group(s) of tasks [using the auto.TaskPath property]
 
 #### Currently monitoring:
