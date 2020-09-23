@@ -1,5 +1,3 @@
-Library of module(s) destined to Windows Task Scheduler monitoring
-
 ### - Windows_TaskScheduler_RunStatus (DataSource)
 
 > Retrieve the list of Scheduled Tasks that aren't in 'Disabled' state

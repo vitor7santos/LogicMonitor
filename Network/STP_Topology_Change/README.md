@@ -1,5 +1,3 @@
-Library of modules destined to STP monitoring
-
 ### - STP_Topology_Change (DataSource)
 
 > Retrieves the last TCN (Topology Change) per vlan
