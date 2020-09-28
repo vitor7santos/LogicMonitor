@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<feed  version="1.0" hasPendingRequests="false" >
+  <company></company>
+  <status>200</status>
+  <errmsg>OK</errmsg>
+  <interval>0</interval>
+    <entry type="predatasource">
+        <version>1601325064</version>
+        <name>Microsoft_SQLServer_CertExpiry</name>
+        <displayedas>SQL Server Certificate Expiry</displayedas>
+        <description>Created by AS Staff (Vitor Santos)</description>
+        <collector>batchscript</collector>
+        <hasMultiInstances>true</hasMultiInstances>
+        <schedule>300</schedule>
+        <appliesTo>system.displayname == &#34;usd01v-sql001&#34;</appliesTo>
+        <wildcardauto>true</wildcardauto>
+        <wildcardpersist>false</wildcardpersist>
+        <wildcardlinuxscript>ad_script</wildcardlinuxscript>
+        <wildcardlinuxcmdline>type=&#34;embeded&#34; </wildcardlinuxcmdline>
+        <wildcardwinscript>ad_script</wildcardwinscript>
+        <wildcardwincmdline>type=&#34;embeded&#34; </wildcardwincmdline>
+        <wildcardgroovyscript>import com.santaba.agent.groovyapi.expect.Expect;
+import com.santaba.agent.groovyapi.snmp.Snmp;
+import com.santaba.agent.groovyapi.http.*;
+import com.santaba.agent.groovyapi.jmx.*;
+import org.xbill.DNS.*;
+import groovy.sql.Sql // needed for SQL connection and query
+import groovy.time.*;
+
+hostname = hostProps.get(&#34;system.hostname&#34;);
+user = hostProps.get(&#34;wmi.user&#34;);
+pass = hostProps.get(&#34;wmi.pass&#34;);
+
+SQLUrl = &#34;jdbc:sqlserver://&#34; + hostname + &#34;;databaseName=master;integratedSecurity=true&#34; //
+sql = Sql.newInstance(SQLUrl, user, pass, &#39;com.microsoft.sqlserver.jdbc.SQLServerDriver&#39;)
+
+sql.eachRow( &#39;SELECT name, expiry_date, issuer_name from sys.certificates&#39;){
+	// extract the actual results into variables
+	cert_name = it.name.replaceAll(&#34;#&#34;,&#34;&#34;); // remove the # from the name key
+	cert_expiryDate = it.expiry_date.toString(); //extract timestamp into string
+	cert_issuer = it.issuer_name;
+	
+	wildvalue=SpecialCharacterCheck(cert_name);
+	
+	println &#34;${wildvalue}##${cert_name}##Expiry Date -&#62; ${cert_expiryDate}####auto.CertificateIssuer=${cert_issuer}&#38;auto.CertificateExpiryDate=${cert_expiryDate}&#34;
+}
+
+sql.close() // close connection
+
+// according to :
+// https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery
+// active discovery WILDVALUE cannot contain  [&#39;=&#39;,&#39;:&#39;,&#39;\&#39;,&#39;#&#39;,&#39;space&#39;] characters
+// the function below will get rid of those special characters if they exist
+def SpecialCharacterCheck(value){
+	//special characters not allowed in ActiveDiscovery
+	def specialCharacters = ~/\=|\:|\\|\#|\s/
+
+	//replace the special character by nothing &#38; return the &#39;new&#39; service name
+	value=value.replaceAll(specialCharacters, &#39;&#39;)
+	//println(service); //DEBUG
+
+	return value
+}</wildcardgroovyscript>
+        <wildcardschedule>60</wildcardschedule>
+        <wildcarddisable>false</wildcarddisable>
+        <wildcarddeleteinactive>true</wildcarddeleteinactive>
+        <agdmethod>none</agdmethod>
+        <agdparams></agdparams>
+        <group></group>
+        <tags></tags>
+        <technology></technology>
+        <adlist><![CDATA[{"agdmethod":"none","method":"ad_script","agdparams":"","id":0,"filters":[{"attribute":"##WILDVALUE##","operation":"Contain","value":"TDE"}],"params":{"type":"embeded","groovyscript":"import com.santaba.agent.groovyapi.expect.Expect;\r\nimport com.santaba.agent.groovyapi.snmp.Snmp;\r\nimport com.santaba.agent.groovyapi.http.*;\r\nimport com.santaba.agent.groovyapi.jmx.*;\r\nimport org.xbill.DNS.*;\r\nimport groovy.sql.Sql // needed for SQL connection and query\r\nimport groovy.time.*;\r\n\r\nhostname = hostProps.get(\"system.hostname\");\r\nuser = hostProps.get(\"wmi.user\");\r\npass = hostProps.get(\"wmi.pass\");\r\n\r\nSQLUrl = \"jdbc:sqlserver://\" + hostname + \";databaseName=master;integratedSecurity=true\" //\r\nsql = Sql.newInstance(SQLUrl, user, pass, 'com.microsoft.sqlserver.jdbc.SQLServerDriver')\r\n\r\nsql.eachRow( 'SELECT name, expiry_date, issuer_name from sys.certificates'){\r\n\t// extract the actual results into variables\r\n\tcert_name = it.name.replaceAll(\"#\",\"\"); // remove the # from the name key\r\n\tcert_expiryDate = it.expiry_date.toString(); //extract timestamp into string\r\n\tcert_issuer = it.issuer_name;\r\n\t\r\n\twildvalue=SpecialCharacterCheck(cert_name);\r\n\t\r\n\tprintln \"${wildvalue}##${cert_name}##Expiry Date -> ${cert_expiryDate}####auto.CertificateIssuer=${cert_issuer}&auto.CertificateExpiryDate=${cert_expiryDate}\"\r\n}\r\n\r\nsql.close() // close connection\r\n\r\n// according to :\r\n// https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery\r\n// active discovery WILDVALUE cannot contain  ['=',':','\\','#','space'] characters\r\n// the function below will get rid of those special characters if they exist\r\ndef SpecialCharacterCheck(value){\r\n\t//special characters not allowed in ActiveDiscovery\r\n\tdef specialCharacters = ~/\\=|\\:|\\\\|\\#|\\s/\r\n\r\n\t//replace the special character by nothing & return the 'new' service name\r\n\tvalue=value.replaceAll(specialCharacters, '')\r\n\t//println(service); //DEBUG\r\n\r\n\treturn value\r\n}"}}]]></adlist>
+        <schemaVersion>2</schemaVersion>
+        <dataSourceType>1</dataSourceType>
+        <attributes>
+        <attribute>
+            <name>scripttype</name>
+            <value>embed</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>scriptgroovy</name>
+            <value>import com.santaba.agent.groovyapi.expect.Expect;
+import com.santaba.agent.groovyapi.snmp.Snmp;
+import com.santaba.agent.groovyapi.http.*;
+import com.santaba.agent.groovyapi.jmx.*;
+import org.xbill.DNS.*;
+import groovy.sql.Sql // needed for SQL connection and query
+import groovy.time.*;
+
+hostname = hostProps.get(&#34;system.hostname&#34;);
+user = hostProps.get(&#34;wmi.user&#34;);
+pass = hostProps.get(&#34;wmi.pass&#34;);
+
+SQLUrl = &#34;jdbc:sqlserver://&#34; + hostname + &#34;;databaseName=master;integratedSecurity=true&#34; //
+sql = Sql.newInstance(SQLUrl, user, pass, &#39;com.microsoft.sqlserver.jdbc.SQLServerDriver&#39;)
+
+sql.eachRow( &#39;SELECT name, expiry_date, issuer_name from sys.certificates&#39;){
+	// extract the actual results into variables
+	cert_name = it.name.replaceAll(&#34;#&#34;,&#34;&#34;); // remove the # from the name key
+	cert_expiryDate = it.expiry_date.toString(); //extract timestamp into string
+	cert_issuer = it.issuer_name;
+	
+	wildvalue=SpecialCharacterCheck(cert_name);
+	
+	timeToExpire = TimeCategory.minus(new Date(),Date.parse(&#34;yyyy-MM-dd HH:mm:ss.SSS&#34;,cert_expiryDate)) //get the actual time to expire (from the cert_expiryDate variable
+
+	// check if number is negative
+	if(timeToExpire.getDays() &#60; 0){
+		// if it&#39;s negative means that&#39;s the number of days to expire
+		daysToExpire = Math.abs(timeToExpire.getDays())
+	}else{
+		// if it&#39;s positive means that&#39;s the number of days that already passed (need to convert into negative number)
+		daysToExpire = -Math.abs(timeToExpire.getDays())
+	}
+
+	println &#34;${wildvalue}.DaysToExpire=${daysToExpire}&#34;
+}
+
+sql.close() // close connection
+return(0);
+
+// according to :
+// https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery
+// active discovery WILDVALUE cannot contain  [&#39;=&#39;,&#39;:&#39;,&#39;\&#39;,&#39;#&#39;,&#39;space&#39;] characters
+// the function below will get rid of those special characters if they exist
+def SpecialCharacterCheck(value){
+	//special characters not allowed in ActiveDiscovery
+	def specialCharacters = ~/\=|\:|\\|\#|\s/
+
+	//replace the special character by nothing &#38; return the &#39;new&#39; service name
+	value=value.replaceAll(specialCharacters, &#39;&#39;)
+	//println(service); //DEBUG
+
+	return value
+}</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowsscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowscmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxcmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>__filter_0</name>
+            <value>##WILDVALUE##	Contain	TDE</value>
+            <comment>Grab TDE certs only</comment>
+        </attribute>
+        </attributes>
+        <datapoints>
+        <datapoint>
+            <name>DaysToExpire</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.DaysToExpire</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Number of day(s) for the actual certificate to expire (converted from &#39;expiry_date&#39; key)</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        </datapoints>
+        <graphs>
+        </graphs>
+        <overviewgraphs>
+        </overviewgraphs>
+        <scripts>
+        </scripts>
+    </entry>
+</feed>
