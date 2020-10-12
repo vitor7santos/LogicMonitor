@@ -1,0 +1,849 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<feed  version="1.0" hasPendingRequests="false" >
+  <company></company>
+  <status>200</status>
+  <errmsg>OK</errmsg>
+  <interval>0</interval>
+    <entry type="predatasource">
+        <version>1596110097</version>
+        <name>Tegile_IntelliFlash_Performance_API</name>
+        <displayedas>Performance</displayedas>
+        <description>Monitors Tegile IntelliFlash Performance (per Controller)</description>
+        <collector>batchscript</collector>
+        <hasMultiInstances>true</hasMultiInstances>
+        <schedule>300</schedule>
+        <appliesTo>hasCategory(&#34;Tegile&#34;)</appliesTo>
+        <wildcardauto>true</wildcardauto>
+        <wildcardpersist>false</wildcardpersist>
+        <wildcardlinuxscript>ad_script</wildcardlinuxscript>
+        <wildcardlinuxcmdline>type=&#34;embeded&#34; </wildcardlinuxcmdline>
+        <wildcardwinscript>ad_script</wildcardwinscript>
+        <wildcardwincmdline>type=&#34;embeded&#34; </wildcardwincmdline>
+        <wildcardgroovyscript>import com.santaba.agent.groovyapi.expect.Expect;
+import com.santaba.agent.groovyapi.snmp.Snmp;
+import com.santaba.agent.groovyapi.http.*;
+import com.santaba.agent.groovyapi.jmx.*;
+import org.xbill.DNS.*;
+//ADDED MANUALLY
+import org.apache.http.client.methods.CloseableHttpResponse
+import org.apache.http.client.methods.HttpGet
+import org.apache.http.client.methods.HttpPost
+import org.apache.http.impl.client.CloseableHttpClient
+import org.apache.http.impl.client.HttpClients
+import org.apache.http.util.EntityUtils
+import javax.net.ssl.X509TrustManager
+import javax.net.ssl.TrustManager
+import java.security.cert.X509Certificate
+import java.security.cert.CertificateException
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import java.security.SecureRandom
+import org.apache.http.conn.ssl.NoopHostnameVerifier
+import org.apache.http.entity.StringEntity
+import org.json.JSONObject
+import org.json.JSONArray
+import groovy.json.JsonOutput
+
+// get the host, credentials, and mgmt station baseurl from the device property table
+hostname = hostProps.get(&#34;system.hostname&#34;);
+userid = hostProps.get(&#34;tegile.user&#34;);
+passwd = hostProps.get(&#34;tegile.pass&#34;);
+base_url = &#34;https://&#34; + hostname;
+//create auth Base64 encryption
+auth_raw = userid + &#34;:&#34; + passwd
+auth = auth_raw.bytes.encodeBase64().toString()
+
+// construct the full endpoint url
+endpoint_url = base_url + &#34;/zebi/api/v2/listPools&#34;; //LIST POOLS
+method = &#34;get&#34;
+
+get_pools = APIrequest(endpoint_url,auth,method)
+
+if (get_pools != 404){
+	// iterate over the json_object 
+	for (int i=0; i&#60;get_pools.length();i++){
+		JSONObject obj = get_pools.get(i);
+
+		pool_name_wildalias = obj.getString(&#34;name&#34;);
+		pool_name_wildvalue = SpecialCharacterCheck(pool_name_wildalias)
+	
+		if(pool_name_wildvalue =~ /(?i).*pool\-b.*/ || pool_name_wildvalue =~ /(?i).*pool\_b.*/){
+			controller=&#34;Controller-B&#34;
+			controller_wildvalue = SpecialCharacterCheck(controller)
+		}else{
+			controller=&#34;Controller-A&#34;
+			controller_wildvalue = SpecialCharacterCheck(controller)
+		}
+
+        println controller_wildvalue+&#34;##&#34;+controller
+	}
+	return(0);
+}
+
+//function to perform API request
+def APIrequest(endpoint_url,auth,method, pool_name=&#34;&#34;, post_reply=false, jsonOutput=true){
+	// HTTP Get
+	def trustAllCerts = [
+		new X509TrustManager() {
+			public X509Certificate[] getAcceptedIssuers() {
+				return null
+			}
+
+			public void checkServerTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+			}
+
+			public void checkClientTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+			}
+		}
+	] as TrustManager[] 
+
+
+	SSLContext sc = SSLContext.getInstance(&#34;SSL&#34;);
+	sc.init(null, trustAllCerts, new SecureRandom());
+	CloseableHttpClient httpclient = HttpClients.custom().setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).setSslcontext(sc).build();
+
+	if(method==&#34;get&#34;){
+		httpGet = new HttpGet(endpoint_url); //SIMPLE GET - Without Params
+		httpGet.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //GET header
+		httpGet.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //GET header
+		response = httpclient.execute(httpGet); //GET response
+	}
+
+	if(method==&#34;post&#34;){
+		httpPost = new HttpPost(endpoint_url);
+		httpPost.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //POST header
+		httpPost.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //POST header
+
+		json = &#39;[&#39;+pool_name+&#39;]&#39;
+		entity = new StringEntity(json);
+		httpPost.setEntity(entity);//POST Entity (params)
+
+		//response = httpclient.execute(httpGet); //GET response
+		response = httpclient.execute(httpPost); //POST response
+	}
+
+	responseBody = EntityUtils.toString(response.getEntity());
+	code = response.getStatusLine().getStatusCode();
+
+	httpclient.close();
+
+	if(code==200){
+		if(method==&#34;get&#34;){
+			if(jsonOutput==true){
+				if(post_reply==false){
+					JSONArray response_ob = new JSONArray(responseBody);
+					return response_ob;//return response
+				}else{
+					reponseBody_raw = &#34;[&#34;+responseBody+&#34;]&#34; //ADD [] to expression (otherwise JSONArray fails)
+					JSONArray response_ob = new JSONArray(reponseBody_raw);
+					return response_ob;//return response
+				}
+			}else{
+				return responseBody;
+			}
+		}
+
+		if(method==&#34;post&#34;){
+			if(post_reply==false){
+				JSONArray response_ob = new JSONArray(responseBody);
+				return response_ob;//return response
+			}else{
+				reponseBody_raw = &#34;[&#34;+responseBody+&#34;]&#34; //ADD [] to expression (otherwise JSONArray fails)
+				JSONArray response_ob = new JSONArray(reponseBody_raw);
+				return response_ob;//return response
+			}
+		}
+	}else{
+		return(404);
+	}
+}
+
+//according to :
+//https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery
+//active discovery WILDVALUE cannot contain  [&#39;=&#39;,&#39;:&#39;,&#39;\&#39;,&#39;#&#39;,&#39;space&#39;] characters
+//the function below will get rid of those special characters if they exist
+def SpecialCharacterCheck(value){
+	//special characters not allowed in ActiveDiscovery
+	def specialCharacters = ~/\=|\:|\\|\#|\s/
+
+	//replace the special character by nothing &#38; return the &#39;new&#39; service name
+	value=value.replaceAll(specialCharacters, &#39;&#39;)
+	//println(service); //DEBUG
+
+	return value
+}</wildcardgroovyscript>
+        <wildcardschedule>60</wildcardschedule>
+        <wildcarddisable>false</wildcarddisable>
+        <wildcarddeleteinactive>false</wildcarddeleteinactive>
+        <agdmethod>none</agdmethod>
+        <agdparams></agdparams>
+        <group>Tegile - API</group>
+        <tags></tags>
+        <technology>Developed by AS staff (Vitor Santos - 07/30/2020)
+
+##Making use of IntelliFlash API v2.3/2.4
+
+Using the module(s) below:
+
+listPools;
+getOneMinuteSystemAnalyticsHistory (CPU/Cache_Hits);</technology>
+        <adlist><![CDATA[{"agdmethod":"none","method":"ad_script","agdparams":"","id":0,"filters":[],"params":{"type":"embeded","groovyscript":"import com.santaba.agent.groovyapi.expect.Expect;\r\nimport com.santaba.agent.groovyapi.snmp.Snmp;\r\nimport com.santaba.agent.groovyapi.http.*;\r\nimport com.santaba.agent.groovyapi.jmx.*;\r\nimport org.xbill.DNS.*;\r\n//ADDED MANUALLY\r\nimport org.apache.http.client.methods.CloseableHttpResponse\r\nimport org.apache.http.client.methods.HttpGet\r\nimport org.apache.http.client.methods.HttpPost\r\nimport org.apache.http.impl.client.CloseableHttpClient\r\nimport org.apache.http.impl.client.HttpClients\r\nimport org.apache.http.util.EntityUtils\r\nimport javax.net.ssl.X509TrustManager\r\nimport javax.net.ssl.TrustManager\r\nimport java.security.cert.X509Certificate\r\nimport java.security.cert.CertificateException\r\nimport javax.net.ssl.HostnameVerifier\r\nimport javax.net.ssl.HttpsURLConnection\r\nimport javax.net.ssl.SSLContext\r\nimport java.security.SecureRandom\r\nimport org.apache.http.conn.ssl.NoopHostnameVerifier\r\nimport org.apache.http.entity.StringEntity\r\nimport org.json.JSONObject\r\nimport org.json.JSONArray\r\nimport groovy.json.JsonOutput\r\n\r\n// get the host, credentials, and mgmt station baseurl from the device property table\r\nhostname = hostProps.get(\"system.hostname\");\r\nuserid = hostProps.get(\"tegile.user\");\r\npasswd = hostProps.get(\"tegile.pass\");\r\nbase_url = \"https://\" + hostname;\r\n//create auth Base64 encryption\r\nauth_raw = userid + \":\" + passwd\r\nauth = auth_raw.bytes.encodeBase64().toString()\r\n\r\n// construct the full endpoint url\r\nendpoint_url = base_url + \"/zebi/api/v2/listPools\"; //LIST POOLS\r\nmethod = \"get\"\r\n\r\nget_pools = APIrequest(endpoint_url,auth,method)\r\n\r\nif (get_pools != 404){\r\n\t// iterate over the json_object \r\n\tfor (int i=0; i<get_pools.length();i++){\r\n\t\tJSONObject obj = get_pools.get(i);\r\n\r\n\t\tpool_name_wildalias = obj.getString(\"name\");\r\n\t\tpool_name_wildvalue = SpecialCharacterCheck(pool_name_wildalias)\r\n\t\r\n\t\tif(pool_name_wildvalue =~ /(?i).*pool\\-b.*/ || pool_name_wildvalue =~ /(?i).*pool\\_b.*/){\r\n\t\t\tcontroller=\"Controller-B\"\r\n\t\t\tcontroller_wildvalue = SpecialCharacterCheck(controller)\r\n\t\t}else{\r\n\t\t\tcontroller=\"Controller-A\"\r\n\t\t\tcontroller_wildvalue = SpecialCharacterCheck(controller)\r\n\t\t}\r\n\r\n        println controller_wildvalue+\"##\"+controller\r\n\t}\r\n\treturn(0);\r\n}\r\n\r\n//function to perform API request\r\ndef APIrequest(endpoint_url,auth,method, pool_name=\"\", post_reply=false, jsonOutput=true){\r\n\t// HTTP Get\r\n\tdef trustAllCerts = [\r\n\t\tnew X509TrustManager() {\r\n\t\t\tpublic X509Certificate[] getAcceptedIssuers() {\r\n\t\t\t\treturn null\r\n\t\t\t}\r\n\r\n\t\t\tpublic void checkServerTrusted(X509Certificate[] certs, String authType) throws CertificateException {\r\n\t\t\t}\r\n\r\n\t\t\tpublic void checkClientTrusted(X509Certificate[] certs, String authType) throws CertificateException {\r\n\t\t\t}\r\n\t\t}\r\n\t] as TrustManager[] \r\n\r\n\r\n\tSSLContext sc = SSLContext.getInstance(\"SSL\");\r\n\tsc.init(null, trustAllCerts, new SecureRandom());\r\n\tCloseableHttpClient httpclient = HttpClients.custom().setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).setSslcontext(sc).build();\r\n\r\n\tif(method==\"get\"){\r\n\t\thttpGet = new HttpGet(endpoint_url); //SIMPLE GET - Without Params\r\n\t\thttpGet.addHeader(\"content-type\", \"application/json\"); //GET header\r\n\t\thttpGet.addHeader(\"Authorization\", \"Basic \"+auth); //GET header\r\n\t\tresponse = httpclient.execute(httpGet); //GET response\r\n\t}\r\n\r\n\tif(method==\"post\"){\r\n\t\thttpPost = new HttpPost(endpoint_url);\r\n\t\thttpPost.addHeader(\"content-type\", \"application/json\"); //POST header\r\n\t\thttpPost.addHeader(\"Authorization\", \"Basic \"+auth); //POST header\r\n\r\n\t\tjson = '['+pool_name+']'\r\n\t\tentity = new StringEntity(json);\r\n\t\thttpPost.setEntity(entity);//POST Entity (params)\r\n\r\n\t\t//response = httpclient.execute(httpGet); //GET response\r\n\t\tresponse = httpclient.execute(httpPost); //POST response\r\n\t}\r\n\r\n\tresponseBody = EntityUtils.toString(response.getEntity());\r\n\tcode = response.getStatusLine().getStatusCode();\r\n\r\n\thttpclient.close();\r\n\r\n\tif(code==200){\r\n\t\tif(method==\"get\"){\r\n\t\t\tif(jsonOutput==true){\r\n\t\t\t\tif(post_reply==false){\r\n\t\t\t\t\tJSONArray response_ob = new JSONArray(responseBody);\r\n\t\t\t\t\treturn response_ob;//return response\r\n\t\t\t\t}else{\r\n\t\t\t\t\treponseBody_raw = \"[\"+responseBody+\"]\" //ADD [] to expression (otherwise JSONArray fails)\r\n\t\t\t\t\tJSONArray response_ob = new JSONArray(reponseBody_raw);\r\n\t\t\t\t\treturn response_ob;//return response\r\n\t\t\t\t}\r\n\t\t\t}else{\r\n\t\t\t\treturn responseBody;\r\n\t\t\t}\r\n\t\t}\r\n\r\n\t\tif(method==\"post\"){\r\n\t\t\tif(post_reply==false){\r\n\t\t\t\tJSONArray response_ob = new JSONArray(responseBody);\r\n\t\t\t\treturn response_ob;//return response\r\n\t\t\t}else{\r\n\t\t\t\treponseBody_raw = \"[\"+responseBody+\"]\" //ADD [] to expression (otherwise JSONArray fails)\r\n\t\t\t\tJSONArray response_ob = new JSONArray(reponseBody_raw);\r\n\t\t\t\treturn response_ob;//return response\r\n\t\t\t}\r\n\t\t}\r\n\t}else{\r\n\t\treturn(404);\r\n\t}\r\n}\r\n\r\n//according to :\r\n//https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery\r\n//active discovery WILDVALUE cannot contain  ['=',':','\\','#','space'] characters\r\n//the function below will get rid of those special characters if they exist\r\ndef SpecialCharacterCheck(value){\r\n\t//special characters not allowed in ActiveDiscovery\r\n\tdef specialCharacters = ~/\\=|\\:|\\\\|\\#|\\s/\r\n\r\n\t//replace the special character by nothing & return the 'new' service name\r\n\tvalue=value.replaceAll(specialCharacters, '')\r\n\t//println(service); //DEBUG\r\n\r\n\treturn value\r\n}"}}]]></adlist>
+        <schemaVersion>2</schemaVersion>
+        <dataSourceType>1</dataSourceType>
+        <attributes>
+        <attribute>
+            <name>scripttype</name>
+            <value>embed</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>scriptgroovy</name>
+            <value>import com.santaba.agent.groovyapi.expect.Expect;
+import com.santaba.agent.groovyapi.snmp.Snmp;
+import com.santaba.agent.groovyapi.http.*;
+import com.santaba.agent.groovyapi.jmx.*;
+import org.xbill.DNS.*;
+//ADDED MANUALLY
+import org.apache.http.client.methods.CloseableHttpResponse
+import org.apache.http.client.methods.HttpGet
+import org.apache.http.client.methods.HttpPost
+import org.apache.http.impl.client.CloseableHttpClient
+import org.apache.http.impl.client.HttpClients
+import org.apache.http.util.EntityUtils
+import javax.net.ssl.X509TrustManager
+import javax.net.ssl.TrustManager
+import java.security.cert.X509Certificate
+import java.security.cert.CertificateException
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import java.security.SecureRandom
+import org.apache.http.conn.ssl.NoopHostnameVerifier
+import org.apache.http.entity.StringEntity
+import org.json.JSONObject
+import org.json.JSONArray
+import groovy.json.JsonOutput
+
+// get the host, credentials, and mgmt station baseurl from the device property table
+hostname = hostProps.get(&#34;system.hostname&#34;);
+userid = hostProps.get(&#34;tegile.user&#34;);
+passwd = hostProps.get(&#34;tegile.pass&#34;);
+base_url = &#34;https://&#34; + hostname;
+//create auth Base64 encryption
+auth_raw = userid + &#34;:&#34; + passwd
+auth = auth_raw.bytes.encodeBase64().toString()
+
+//init PoolArray
+poolArray=[]
+
+// construct the full endpoint url
+endpoint_url = base_url + &#34;/zebi/api/v2/listPools&#34;; //LIST POOLS
+method = &#34;get&#34;
+
+get_pools = APIrequest(endpoint_url,auth,method)
+
+if (get_pools != 404){
+	// iterate over the json_object 
+	for (int i=0; i&#60;get_pools.length();i++){
+		JSONObject obj = get_pools.get(i);
+
+		pool_name_wildalias = obj.getString(&#34;name&#34;);
+		pool_name_wildvalue = SpecialCharacterCheck(pool_name_wildalias)
+
+		if(pool_name_wildvalue =~ /(?i).*pool\-b.*/ || pool_name_wildvalue =~ /(?i).*pool\_b.*/){
+			controller=&#34;Controller-B&#34;
+			controller_wildvalue = SpecialCharacterCheck(controller)
+		}else{
+			controller=&#34;Controller-A&#34;
+			controller_wildvalue = SpecialCharacterCheck(controller)
+		}
+
+		//feed the Pool(s) array
+		poolArray.add(pool_name_wildvalue)
+	}
+
+	//now we have the pools into an array, we&#39;ll need to iterate over that list &#38; pull info for each Pool
+	poolArray.each {
+		pool_name=it
+		pool=pool_name //store the actual Pool (in order to use on the PerformanceCheck, since the pool_name will be overwritten in the POST request)
+
+		//get CPU data (pool level)
+		endpoint_url = base_url + &#34;/zebi/api/v2/getOneMinuteSystemAnalyticsHistory&#34;; //GET POOL SPACE INFO
+		method = &#34;post&#34;
+		pool_name = &#39;[&#34;CPU&#34;]&#39;
+		post_reply=false
+	
+		get_pool_cpu = APIrequest(endpoint_url,auth,method,pool_name,post_reply)
+		
+		//the Controller names here switch a little bit from what&#39;s retrieved via API (tweaking those to extract the proper JSON keys on this POST request)
+		
+		if(pool =~ /(?i).*pool\-b.*/ || pool =~ /(?i).*pool\_b.*/){
+			controller_raw=&#34;Controller-B&#34;
+			controller=SpecialCharacterCheck(controller_raw)
+		}else{
+			controller_raw=&#34;Controller-A&#34;
+			controller=SpecialCharacterCheck(controller_raw)
+		}
+
+		if (get_pool_cpu != 404){
+			// iterate over the json_object 
+			for (int i=0; i&#60;get_pool_cpu.length();i++){
+				JSONObject obj = get_pool_cpu.get(i);
+				
+				//extract data from JSON response
+				Total_Used = obj[&#34;averages&#34;][controller+&#34;/Total_Used&#34;];
+				CPU_System = obj[&#34;averages&#34;][controller+&#34;/System&#34;];
+				Interrupts = obj[&#34;averages&#34;][controller+&#34;/Interrupts&#34;];
+				System_Calls = obj[&#34;averages&#34;][controller+&#34;/System_Calls&#34;];
+				User = obj[&#34;averages&#34;][controller+&#34;/User&#34;];
+
+				println controller+&#34;.CPU.Total_Used=&#34;+Total_Used
+				println controller+&#34;.CPU.System=&#34;+CPU_System
+				println controller+&#34;.CPU.Interrupts=&#34;+Interrupts
+				println controller+&#34;.CPU.System_Calls=&#34;+System_Calls
+				println controller+&#34;.CPU.User=&#34;+User
+			}
+		}
+
+		//get Cache Hits (pool level)
+		endpoint_url = base_url + &#34;/zebi/api/v2/getOneMinuteSystemAnalyticsHistory&#34;; //GET POOL SPACE INFO
+		method = &#34;post&#34;
+		pool_name = &#39;[&#34;CACHE_HITS&#34;]&#39;
+		post_reply=false
+	
+		get_pool_cacheHits = APIrequest(endpoint_url,auth,method,pool_name,post_reply)
+
+		if (get_pool_cacheHits != 404){
+			// iterate over the json_object 
+			for (int i=0; i&#60;get_pool_cacheHits.length();i++){
+				JSONObject obj = get_pool_cacheHits.get(i);
+				
+				//extract data from JSON response
+				SSD_Reads = obj[&#34;averages&#34;][controller+&#34;/SSD_Reads&#34;];
+				RAM_Reads = obj[&#34;averages&#34;][controller+&#34;/RAM_Reads&#34;];
+				Cache_Reads = obj[&#34;averages&#34;][controller+&#34;/Cache_Reads&#34;];
+
+				println controller+&#34;.CacheHits.SSD_Reads=&#34;+SSD_Reads
+				println controller+&#34;.CacheHits.RAM_Reads=&#34;+RAM_Reads
+				println controller+&#34;.CacheHits.Cache_Reads=&#34;+Cache_Reads
+			}
+		}
+	}
+	return(0);
+}
+
+//function to perform API request
+def APIrequest(endpoint_url,auth,method, pool_name=&#34;&#34;, post_reply=false, jsonOutput=true){
+	// HTTP Get
+	def trustAllCerts = [
+		new X509TrustManager() {
+			public X509Certificate[] getAcceptedIssuers() {
+				return null
+			}
+
+			public void checkServerTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+			}
+
+			public void checkClientTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+			}
+		}
+	] as TrustManager[] 
+
+
+	SSLContext sc = SSLContext.getInstance(&#34;SSL&#34;);
+	sc.init(null, trustAllCerts, new SecureRandom());
+	CloseableHttpClient httpclient = HttpClients.custom().setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).setSslcontext(sc).build();
+
+	if(method==&#34;get&#34;){
+		httpGet = new HttpGet(endpoint_url); //SIMPLE GET - Without Params
+		httpGet.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //GET header
+		httpGet.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //GET header
+		response = httpclient.execute(httpGet); //GET response
+	}
+
+	if(method==&#34;post&#34;){
+		httpPost = new HttpPost(endpoint_url);
+		httpPost.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //POST header
+		httpPost.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //POST header
+
+		json = &#39;[&#39;+pool_name+&#39;]&#39;
+		entity = new StringEntity(json);
+		httpPost.setEntity(entity);//POST Entity (params)
+
+		//response = httpclient.execute(httpGet); //GET response
+		response = httpclient.execute(httpPost); //POST response
+	}
+
+	responseBody = EntityUtils.toString(response.getEntity());
+	code = response.getStatusLine().getStatusCode();
+
+	httpclient.close();
+
+	if(code==200){
+		if(method==&#34;get&#34;){
+			if(jsonOutput==true){
+				if(post_reply==false){
+					JSONArray response_ob = new JSONArray(responseBody);
+					return response_ob;//return response
+				}else{
+					reponseBody_raw = &#34;[&#34;+responseBody+&#34;]&#34; //ADD [] to expression (otherwise JSONArray fails)
+					JSONArray response_ob = new JSONArray(reponseBody_raw);
+					return response_ob;//return response
+				}
+			}else{
+				return responseBody;
+			}
+		}
+
+		if(method==&#34;post&#34;){
+			if(post_reply==false){
+				JSONArray response_ob = new JSONArray(responseBody);
+				return response_ob;//return response
+			}else{
+				reponseBody_raw = &#34;[&#34;+responseBody+&#34;]&#34; //ADD [] to expression (otherwise JSONArray fails)
+				JSONArray response_ob = new JSONArray(reponseBody_raw);
+				return response_ob;//return response
+			}
+		}
+	}else{
+		return(404);
+	}
+}
+
+//according to :
+//https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery
+//active discovery WILDVALUE cannot contain  [&#39;=&#39;,&#39;:&#39;,&#39;\&#39;,&#39;#&#39;,&#39;space&#39;] characters
+//the function below will get rid of those special characters if they exist
+def SpecialCharacterCheck(value){
+	//special characters not allowed in ActiveDiscovery
+	def specialCharacters = ~/\=|\:|\\|\#|\s/
+
+	//replace the special character by nothing &#38; return the &#39;new&#39; service name
+	value=value.replaceAll(specialCharacters, &#39;&#39;)
+	//println(service); //DEBUG
+
+	return value
+}</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowsscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowscmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxcmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        </attributes>
+        <datapoints>
+        <datapoint>
+            <name>Total_Used</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.CPU.Total_Used</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr>&#62;= 85 85 95</alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Total percent CPU time used.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>4</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Interrupts</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.CPU.Interrupts</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Average interrupts fired per second.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>System</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.CPU.System</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Percent CPU time spent in kernel.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>System_Calls</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.CPU.System_Calls</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Average system calls per second.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>User</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.CPU.User</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Percent CPU time spent in user space.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Cache_Reads</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.CacheHits.Cache_Reads</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Percentage of reads that hit either RAM or SSD cache.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>RAM_Reads</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.CacheHits.RAM_Reads</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Percentage of reads that hit RAM cache.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>SSD_Reads</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.CacheHits.SSD_Reads</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Percentage of reads that hit SSD cache.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        </datapoints>
+        <graphs>
+        <graph>
+            <name>Cache RAM/SSD Operations</name>
+            <title>Cache RAM/SSD Operations</title>
+            <verticallabel>%</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>5</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>RAM_Reads</name>
+            <datapointname>RAM_Reads</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>SSD_Reads</name>
+            <datapointname>SSD_Reads</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>RAM Read</legend>
+                <color>aqua</color>
+                <datapointname>RAM_Reads</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>SSD Read</legend>
+                <color>silver</color>
+                <datapointname>SSD_Reads</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>CPU Activity</name>
+            <title>CPU Activity</title>
+            <verticallabel>#/sec</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>2</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>Interrupts</name>
+            <datapointname>Interrupts</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>System_Calls</name>
+            <datapointname>System_Calls</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>Interrupts</legend>
+                <color>red1</color>
+                <datapointname>Interrupts</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>System Calls</legend>
+                <color>silver</color>
+                <datapointname>System_Calls</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>CPU Utilization</name>
+            <title>CPU Utilization</title>
+            <verticallabel>%</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>100.0</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>1</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>Total_Used</name>
+            <datapointname>Total_Used</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>CPU</legend>
+                <color>orange2</color>
+                <datapointname>Total_Used</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        </graphs>
+        <overviewgraphs>
+        <overviewgraph>
+            <name>Cache Reads (RAM/SSD)</name>
+            <title>Cache Reads (RAM/SSD)</title>
+            <verticallabel>%</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>2</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>Cache_Reads</name>
+            <datapointname>Cache_Reads</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE## - Cache Reads (RAM/SSD)</legend>
+                <datapointname>Cache_Reads</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
+        <overviewgraph>
+            <name>CPU Utilization</name>
+            <title>CPU Utilization</title>
+            <verticallabel>%</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>100.0</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>1</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>Total_Used</name>
+            <datapointname>Total_Used</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE## - CPU Usage</legend>
+                <datapointname>Total_Used</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>orange2</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
+        </overviewgraphs>
+        <scripts>
+        </scripts>
+    </entry>
+</feed>

@@ -1,0 +1,2662 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<feed  version="1.0" hasPendingRequests="false" >
+  <company></company>
+  <status>200</status>
+  <errmsg>OK</errmsg>
+  <interval>0</interval>
+    <entry type="predatasource">
+        <version>1596111405</version>
+        <name>Tegile_IntelliFlash_Pools_API</name>
+        <displayedas>Pools</displayedas>
+        <description>Monitors Tegile Pools usage/performance stats information + Pool disk type statistics (per Disk Type)</description>
+        <collector>batchscript</collector>
+        <hasMultiInstances>true</hasMultiInstances>
+        <schedule>300</schedule>
+        <appliesTo>hasCategory(&#34;Tegile&#34;)</appliesTo>
+        <wildcardauto>true</wildcardauto>
+        <wildcardpersist>false</wildcardpersist>
+        <wildcardlinuxscript>ad_script</wildcardlinuxscript>
+        <wildcardlinuxcmdline>type=&#34;embeded&#34; </wildcardlinuxcmdline>
+        <wildcardwinscript>ad_script</wildcardwinscript>
+        <wildcardwincmdline>type=&#34;embeded&#34; </wildcardwincmdline>
+        <wildcardgroovyscript>import com.santaba.agent.groovyapi.expect.Expect;
+import com.santaba.agent.groovyapi.snmp.Snmp;
+import com.santaba.agent.groovyapi.http.*;
+import com.santaba.agent.groovyapi.jmx.*;
+import org.xbill.DNS.*;
+//ADDED MANUALLY
+import org.apache.http.client.methods.CloseableHttpResponse
+import org.apache.http.client.methods.HttpGet
+import org.apache.http.client.methods.HttpPost
+import org.apache.http.impl.client.CloseableHttpClient
+import org.apache.http.impl.client.HttpClients
+import org.apache.http.util.EntityUtils
+import javax.net.ssl.X509TrustManager
+import javax.net.ssl.TrustManager
+import java.security.cert.X509Certificate
+import java.security.cert.CertificateException
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import java.security.SecureRandom
+import org.apache.http.conn.ssl.NoopHostnameVerifier
+import org.apache.http.entity.StringEntity
+import org.json.JSONObject
+import org.json.JSONArray
+
+// get the host, credentials, and mgmt station baseurl from the device property table
+hostname = hostProps.get(&#34;system.hostname&#34;);
+userid = hostProps.get(&#34;tegile.user&#34;);
+passwd = hostProps.get(&#34;tegile.pass&#34;);
+base_url = &#34;https://&#34; + hostname;
+// construct the full endpoint url
+endpoint_url = base_url + &#34;/zebi/api/v2/listPools&#34;; //LIST POOLS
+
+auth_raw = userid + &#34;:&#34; + passwd
+auth = auth_raw.bytes.encodeBase64().toString()
+
+// HTTP Get
+def trustAllCerts = [
+    new X509TrustManager() {
+        public X509Certificate[] getAcceptedIssuers() {
+            return null
+        }
+
+        public void checkServerTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+        }
+
+        public void checkClientTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+        }
+    }
+] as TrustManager[] 
+
+
+SSLContext sc = SSLContext.getInstance(&#34;SSL&#34;);
+sc.init(null, trustAllCerts, new SecureRandom());
+CloseableHttpClient httpclient = HttpClients.custom().setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).setSslcontext(sc).build();
+
+httpGet = new HttpGet(endpoint_url); //SIMPLE GET - Without Params
+httpGet.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //GET header
+httpGet.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //GET header
+
+response = httpclient.execute(httpGet); //GET response
+
+responseBody = EntityUtils.toString(response.getEntity());
+code = response.getStatusLine().getStatusCode();
+
+httpclient.close();
+
+if(code==200){	
+	JSONArray response_object = new JSONArray(responseBody);
+
+    // iterate over the json_object 
+    for (int i=0; i&#60;response_object.length();i++){
+        JSONObject obj = response_object.get(i);
+		
+        pool_name = obj.getString(&#34;name&#34;);
+		println SpecialCharacterCheck(pool_name)+&#34;##&#34;+pool_name;
+    }
+	
+	return(0);
+}
+
+//according to :
+//https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery
+//active discovery WILDVALUE cannot contain  [&#39;=&#39;,&#39;:&#39;,&#39;\&#39;,&#39;#&#39;,&#39;space&#39;] characters
+//the function below will get rid of those special characters if they exist
+def SpecialCharacterCheck(value){
+	//special characters not allowed in ActiveDiscovery
+	def specialCharacters = ~/\=|\:|\\|\#|\s/
+
+	//replace the special character by nothing &#38; return the &#39;new&#39; service name
+	value=value.replaceAll(specialCharacters, &#39;&#39;)
+	//println(service); //DEBUG
+
+	return value
+}</wildcardgroovyscript>
+        <wildcardschedule>60</wildcardschedule>
+        <wildcarddisable>false</wildcarddisable>
+        <wildcarddeleteinactive>false</wildcarddeleteinactive>
+        <agdmethod>none</agdmethod>
+        <agdparams></agdparams>
+        <group>Tegile - API</group>
+        <tags></tags>
+        <technology>Developed by AS staff (Vitor Santos - 07/30/2020)
+
+##Making use of IntelliFlash API v2.3/2.4
+
+Using the module(s) below:
+
+listPools;
+getPoolSpaceInfo;
+getOneMinuteSystemAnalyticsHistory (fetching the Averages);
+getOneMinuteDataAnalyticsHistory (fetching the Averages);</technology>
+        <adlist><![CDATA[{"agdmethod":"none","method":"ad_script","agdparams":"","id":0,"filters":[],"params":{"type":"embeded","groovyscript":"import com.santaba.agent.groovyapi.expect.Expect;\r\nimport com.santaba.agent.groovyapi.snmp.Snmp;\r\nimport com.santaba.agent.groovyapi.http.*;\r\nimport com.santaba.agent.groovyapi.jmx.*;\r\nimport org.xbill.DNS.*;\r\n//ADDED MANUALLY\r\nimport org.apache.http.client.methods.CloseableHttpResponse\r\nimport org.apache.http.client.methods.HttpGet\r\nimport org.apache.http.client.methods.HttpPost\r\nimport org.apache.http.impl.client.CloseableHttpClient\r\nimport org.apache.http.impl.client.HttpClients\r\nimport org.apache.http.util.EntityUtils\r\nimport javax.net.ssl.X509TrustManager\r\nimport javax.net.ssl.TrustManager\r\nimport java.security.cert.X509Certificate\r\nimport java.security.cert.CertificateException\r\nimport javax.net.ssl.HostnameVerifier\r\nimport javax.net.ssl.HttpsURLConnection\r\nimport javax.net.ssl.SSLContext\r\nimport java.security.SecureRandom\r\nimport org.apache.http.conn.ssl.NoopHostnameVerifier\r\nimport org.apache.http.entity.StringEntity\r\nimport org.json.JSONObject\r\nimport org.json.JSONArray\r\n\r\n// get the host, credentials, and mgmt station baseurl from the device property table\r\nhostname = hostProps.get(\"system.hostname\");\r\nuserid = hostProps.get(\"tegile.user\");\r\npasswd = hostProps.get(\"tegile.pass\");\r\nbase_url = \"https://\" + hostname;\r\n// construct the full endpoint url\r\nendpoint_url = base_url + \"/zebi/api/v2/listPools\"; //LIST POOLS\r\n\r\nauth_raw = userid + \":\" + passwd\r\nauth = auth_raw.bytes.encodeBase64().toString()\r\n\r\n// HTTP Get\r\ndef trustAllCerts = [\r\n    new X509TrustManager() {\r\n        public X509Certificate[] getAcceptedIssuers() {\r\n            return null\r\n        }\r\n\r\n        public void checkServerTrusted(X509Certificate[] certs, String authType) throws CertificateException {\r\n        }\r\n\r\n        public void checkClientTrusted(X509Certificate[] certs, String authType) throws CertificateException {\r\n        }\r\n    }\r\n] as TrustManager[] \r\n\r\n\r\nSSLContext sc = SSLContext.getInstance(\"SSL\");\r\nsc.init(null, trustAllCerts, new SecureRandom());\r\nCloseableHttpClient httpclient = HttpClients.custom().setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).setSslcontext(sc).build();\r\n\r\nhttpGet = new HttpGet(endpoint_url); //SIMPLE GET - Without Params\r\nhttpGet.addHeader(\"content-type\", \"application/json\"); //GET header\r\nhttpGet.addHeader(\"Authorization\", \"Basic \"+auth); //GET header\r\n\r\nresponse = httpclient.execute(httpGet); //GET response\r\n\r\nresponseBody = EntityUtils.toString(response.getEntity());\r\ncode = response.getStatusLine().getStatusCode();\r\n\r\nhttpclient.close();\r\n\r\nif(code==200){\t\r\n\tJSONArray response_object = new JSONArray(responseBody);\r\n\r\n    // iterate over the json_object \r\n    for (int i=0; i<response_object.length();i++){\r\n        JSONObject obj = response_object.get(i);\r\n\t\t\r\n        pool_name = obj.getString(\"name\");\r\n\t\tprintln SpecialCharacterCheck(pool_name)+\"##\"+pool_name;\r\n    }\r\n\t\r\n\treturn(0);\r\n}\r\n\r\n//according to :\r\n//https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery\r\n//active discovery WILDVALUE cannot contain  ['=',':','\\','#','space'] characters\r\n//the function below will get rid of those special characters if they exist\r\ndef SpecialCharacterCheck(value){\r\n\t//special characters not allowed in ActiveDiscovery\r\n\tdef specialCharacters = ~/\\=|\\:|\\\\|\\#|\\s/\r\n\r\n\t//replace the special character by nothing & return the 'new' service name\r\n\tvalue=value.replaceAll(specialCharacters, '')\r\n\t//println(service); //DEBUG\r\n\r\n\treturn value\r\n}"}}]]></adlist>
+        <schemaVersion>2</schemaVersion>
+        <dataSourceType>1</dataSourceType>
+        <attributes>
+        <attribute>
+            <name>scripttype</name>
+            <value>embed</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>scriptgroovy</name>
+            <value>import com.santaba.agent.groovyapi.expect.Expect;
+import com.santaba.agent.groovyapi.snmp.Snmp;
+import com.santaba.agent.groovyapi.http.*;
+import com.santaba.agent.groovyapi.jmx.*;
+import org.xbill.DNS.*;
+//ADDED MANUALLY
+import org.apache.http.client.methods.CloseableHttpResponse
+import org.apache.http.client.methods.HttpGet
+import org.apache.http.client.methods.HttpPost
+import org.apache.http.impl.client.CloseableHttpClient
+import org.apache.http.impl.client.HttpClients
+import org.apache.http.util.EntityUtils
+import javax.net.ssl.X509TrustManager
+import javax.net.ssl.TrustManager
+import java.security.cert.X509Certificate
+import java.security.cert.CertificateException
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import java.security.SecureRandom
+import org.apache.http.conn.ssl.NoopHostnameVerifier
+import org.apache.http.entity.StringEntity
+import org.json.JSONObject
+import org.json.JSONArray
+
+// get the host, credentials, and mgmt station baseurl from the device property table
+hostname = hostProps.get(&#34;system.hostname&#34;);
+userid = hostProps.get(&#34;tegile.user&#34;);
+passwd = hostProps.get(&#34;tegile.pass&#34;);
+base_url = &#34;https://&#34; + hostname;
+//create auth Base64 encryption
+auth_raw = userid + &#34;:&#34; + passwd
+auth = auth_raw.bytes.encodeBase64().toString()
+
+//init PoolArray
+poolArray=[]
+
+// construct the full endpoint url
+endpoint_url = base_url + &#34;/zebi/api/v2/listPools&#34;; //LIST POOLS
+method = &#34;get&#34;
+
+get_pools = APIrequest(endpoint_url,auth,method)
+
+if (get_pools != 404){
+	// iterate over the json_object 
+	for (int i=0; i&#60;get_pools.length();i++){
+		JSONObject obj = get_pools.get(i);
+
+		pool_name_wildalias = obj.getString(&#34;name&#34;);
+		pool_name_wildvalue = SpecialCharacterCheck(pool_name_wildalias)
+
+		//feed the Pool(s) array
+		poolArray.add(pool_name_wildvalue)
+	}
+
+	//now we have the pools into an array, we&#39;ll need to iterate over that list &#38; pull info for each Pool
+	poolArray.each {
+		pool_name=it
+		pool=pool_name //store the actual Pool (in order to use on the PerformanceCheck, since the pool_name will be overwritten in the POST request)
+
+		// construct the full endpoint url
+		endpoint_url = base_url + &#34;/zebi/api/v2/getPoolSpaceInfo&#34;; //GET POOL SPACE INFO
+		method = &#34;post&#34;
+		post_reply=true
+		//request info for the passed Pool
+		get_pool_info = APIrequest(endpoint_url,auth,method,&#39;&#34;&#39;+pool_name+&#39;&#34;&#39;,post_reply)
+		
+		if (get_pool_info != 404){
+			// iterate over the json_object 
+			for (int i=0; i&#60;get_pool_info.length();i++){
+				JSONObject obj = get_pool_info.get(i);
+
+				//extract data from JSON response
+				totalPoolSize = obj[&#34;totalPoolSize&#34;];
+				originalUsedByDataAndSnapshot=obj[&#34;originalUsedByDataAndSnapshot&#34;]
+				usedByDataAndSnapshot=obj[&#34;usedByDataAndSnapshot&#34;]
+				compressionSavingsPercentage=obj[&#34;compressionSavingsPercentage&#34;]
+				dedupeSavingsPercentage=obj[&#34;dedupeSavingsPercentage&#34;]
+				totalSavingsPercentage=obj[&#34;totalSavingsPercentage&#34;]
+				usedByAll=obj[&#34;usedByAll&#34;]
+				available=obj[&#34;available&#34;]
+				usedByData=obj[&#34;usedByData&#34;]
+				usedByReservation=obj[&#34;usedByReservation&#34;]
+				usedBySnapshot=obj[&#34;usedBySnapshot&#34;]
+				totalMetaSize=obj[&#34;totalMetaSize&#34;]
+				usedMeta=obj[&#34;usedMeta&#34;]
+				
+				//print the actual values (for the respective datapoints
+				println pool_name+&#34;.totalPoolSize=&#34;+totalPoolSize
+				println pool_name+&#34;.originalUsedByDataAndSnapshot=&#34;+originalUsedByDataAndSnapshot
+				println pool_name+&#34;.usedByDataAndSnapshot=&#34;+usedByDataAndSnapshot
+				println pool_name+&#34;.compressionSavingsPercentage=&#34;+compressionSavingsPercentage
+				println pool_name+&#34;.dedupeSavingsPercentage=&#34;+dedupeSavingsPercentage
+				println pool_name+&#34;.totalSavingsPercentage=&#34;+totalSavingsPercentage
+				println pool_name+&#34;.usedByAll=&#34;+usedByAll
+				println pool_name+&#34;.available=&#34;+available
+				println pool_name+&#34;.usedByData=&#34;+usedByData
+				println pool_name+&#34;.usedByReservation=&#34;+usedByReservation
+				println pool_name+&#34;.usedBySnapshot=&#34;+usedBySnapshot
+				println pool_name+&#34;.totalMetaSize=&#34;+totalMetaSize
+				println pool_name+&#34;.usedMeta=&#34;+usedMeta
+			}
+		}
+
+		//get Pool Disks Performance Stats
+		endpoint_url = base_url + &#34;/zebi/api/v2/getOneMinuteSystemAnalyticsHistory&#34;;
+		method = &#34;post&#34;
+		pool_name = &#39;[&#34;POOL_PERFORMANCE&#34;]&#39;
+		post_reply=false
+
+		get_disks_performance = APIrequest(endpoint_url,auth,method,pool_name,post_reply)
+
+		if (get_disks_performance != 404){
+			for (int i=0; i&#60;get_disks_performance.length();i++){
+				JSONObject obj = get_disks_performance.get(i);
+			
+				//according to Tegile there&#39;s 4 type of Type (within PoolPerformance)
+				//We&#39;ll test those 4 &#38; see which ones return data (within each pool)
+				try{
+					DataType_check = obj[&#34;averages&#34;][pool+&#34;/Data/Write_Ops&#34;];
+					DataType_check_bool=true
+				}catch(Exception exc1){
+					DataType_check_bool=false
+				}
+
+				try{
+					CatcheType_check = obj[&#34;averages&#34;][pool+&#34;/Cache/Write_Ops&#34;];
+					CatcheType_check_bool=true
+				}catch(Exception exc1){
+					CatcheType_check_bool=false
+				}
+
+				try{
+					MetaType_check = obj[&#34;averages&#34;][pool+&#34;/Meta/Write_Ops&#34;];
+					MetaType_check_bool=true
+				}catch(Exception exc1){
+					MetaType_check_bool=false
+				}
+
+				try{
+					IFlashType_check = obj[&#34;averages&#34;][pool+&#34;/Iflash/Write_Ops&#34;];
+					IFlashType_check_bool=true
+				}catch(Exception exc1){
+					IFlashType_check_bool=false
+				}
+				
+				//Since we now know which type of Disks there&#39;s (in terms of Pool Performance)
+				//Lets grab the different values for each one (if True)
+				if(DataType_check_bool==true){
+					Read_MBps= obj[&#34;averages&#34;][pool+&#34;/Data/Read_MBps&#34;];
+					Write_Mbps= obj[&#34;averages&#34;][pool+&#34;/Data/Write_MBps&#34;];
+					Read_Ops= obj[&#34;averages&#34;][pool+&#34;/Data/Read_Ops&#34;];
+					Write_Ops= obj[&#34;averages&#34;][pool+&#34;/Data/Write_Ops&#34;];
+					Read_Latency= obj[&#34;averages&#34;][pool+&#34;/Data/Read_Latency&#34;];
+					Write_Latency= obj[&#34;averages&#34;][pool+&#34;/Data/Write_Latency&#34;];
+
+					println pool+&#34;.PerformanceStats.DataDisk.Read_MBps=&#34;+Read_MBps
+					println pool+&#34;.PerformanceStats.DataDisk.Write_MBps=&#34;+Write_Mbps
+					println pool+&#34;.PerformanceStats.DataDisk.Read_Ops=&#34;+Read_Ops
+					println pool+&#34;.PerformanceStats.DataDisk.Write_Ops=&#34;+Write_Ops
+					println pool+&#34;.PerformanceStats.DataDisk.Read_Latency=&#34;+Read_Latency
+					println pool+&#34;.PerformanceStats.DataDisk.Write_Latency=&#34;+Write_Latency
+				}
+
+				if(CatcheType_check_bool==true){
+					Read_MBps= obj[&#34;averages&#34;][pool+&#34;/Cache/Read_MBps&#34;];
+					Write_Mbps= obj[&#34;averages&#34;][pool+&#34;/Cache/Write_MBps&#34;];
+					Read_Ops= obj[&#34;averages&#34;][pool+&#34;/Cache/Read_Ops&#34;];
+					Write_Ops= obj[&#34;averages&#34;][pool+&#34;/Cache/Write_Ops&#34;];
+					Read_Latency= obj[&#34;averages&#34;][pool+&#34;/Cache/Read_Latency&#34;];
+					Write_Latency= obj[&#34;averages&#34;][pool+&#34;/Cache/Write_Latency&#34;];
+
+					println pool+&#34;.PerformanceStats.CacheDisk.Read_MBps=&#34;+Read_MBps
+					println pool+&#34;.PerformanceStats.CacheDisk.Write_MBps=&#34;+Write_Mbps
+					println pool+&#34;.PerformanceStats.CacheDisk.Read_Ops=&#34;+Read_Ops
+					println pool+&#34;.PerformanceStats.CacheDisk.Write_Ops=&#34;+Write_Ops
+					println pool+&#34;.PerformanceStats.CacheDisk.Read_Latency=&#34;+Read_Latency
+					println pool+&#34;.PerformanceStats.CacheDisk.Write_Latency=&#34;+Write_Latency
+				}
+
+				if(MetaType_check_bool==true){
+					Read_MBps= obj[&#34;averages&#34;][pool+&#34;/Meta/Read_MBps&#34;];
+					Write_Mbps= obj[&#34;averages&#34;][pool+&#34;/Meta/Write_MBps&#34;];
+					Read_Ops= obj[&#34;averages&#34;][pool+&#34;/Meta/Read_Ops&#34;];
+					Write_Ops= obj[&#34;averages&#34;][pool+&#34;/Meta/Write_Ops&#34;];
+					Read_Latency= obj[&#34;averages&#34;][pool+&#34;/Meta/Read_Latency&#34;];
+					Write_Latency= obj[&#34;averages&#34;][pool+&#34;/Meta/Write_Latency&#34;];
+
+					println pool+&#34;.PerformanceStats.MetaDisk.Read_MBps=&#34;+Read_MBps
+					println pool+&#34;.PerformanceStats.MetaDisk.Write_MBps=&#34;+Write_Mbps
+					println pool+&#34;.PerformanceStats.MetaDisk.Read_Ops=&#34;+Read_Ops
+					println pool+&#34;.PerformanceStats.MetaDisk.Write_Ops=&#34;+Write_Ops
+					println pool+&#34;.PerformanceStats.MetaDisk.Read_Latency=&#34;+Read_Latency
+					println pool+&#34;.PerformanceStats.MetaDisk.Write_Latency=&#34;+Write_Latency
+				}
+
+				if(IFlashType_check_bool==true){
+					Read_MBps= obj[&#34;averages&#34;][pool+&#34;/Iflash/Read_MBps&#34;];
+					Write_Mbps= obj[&#34;averages&#34;][pool+&#34;/Iflash/Write_MBps&#34;];
+					Read_Ops= obj[&#34;averages&#34;][pool+&#34;/Iflash/Read_Ops&#34;];
+					Write_Ops= obj[&#34;averages&#34;][pool+&#34;/Iflash/Write_Ops&#34;];
+					Read_Latency= obj[&#34;averages&#34;][pool+&#34;/Iflash/Read_Latency&#34;];
+					Write_Latency= obj[&#34;averages&#34;][pool+&#34;/Iflash/Write_Latency&#34;];
+
+					println pool+&#34;.PerformanceStats.IflashDisk.Read_MBps=&#34;+Read_MBps
+					println pool+&#34;.PerformanceStats.IflashDisk.Write_MBps=&#34;+Write_Mbps
+					println pool+&#34;.PerformanceStats.IflashDisk.Read_Ops=&#34;+Read_Ops
+					println pool+&#34;.PerformanceStats.IflashDisk.Write_Ops=&#34;+Write_Ops
+					println pool+&#34;.PerformanceStats.IflashDisk.Read_Latency=&#34;+Read_Latency
+					println pool+&#34;.PerformanceStats.IflashDisk.Write_Latency=&#34;+Write_Latency
+				}
+			} 
+		}
+
+		//get Pool Performance Stats
+		endpoint_url = base_url + &#34;/zebi/api/v2/getOneMinuteDataAnalyticsHistory&#34;;
+		method = &#34;post&#34;
+		pool_name = &#39;[&#34;&#39;+pool+&#39;&#34;],null,null&#39;
+		post_reply=false
+
+		get_pool_performance = APIrequest(endpoint_url,auth,method,pool_name,post_reply)
+
+		if (get_pool_performance != 404){
+			for (int i=0; i&#60;get_pool_performance.length();i++){
+				JSONObject obj = get_pool_performance.get(i);
+				
+				Read_MBps = obj[&#34;averages&#34;][&#34;Read_MBps&#34;]
+				Write_MBps = obj[&#34;averages&#34;][&#34;Write_MBps&#34;]
+				Total_MBps = obj[&#34;averages&#34;][&#34;Total_MBps&#34;]
+				Read_Ops = obj[&#34;averages&#34;][&#34;Read_Ops&#34;]
+				Write_Ops = obj[&#34;averages&#34;][&#34;Write_Ops&#34;]
+				Total_Ops = obj[&#34;averages&#34;][&#34;Total_Ops&#34;]
+				Read_Latency = obj[&#34;averages&#34;][&#34;Read_Latency&#34;]
+				Write_Latency = obj[&#34;averages&#34;][&#34;Write_Latency&#34;]
+				Average_Latency = obj[&#34;averages&#34;][&#34;Average_Latency&#34;]
+				
+
+				println pool+&#34;.PerformanceStats.Pool.Read_MBps=&#34;+Read_MBps
+				println pool+&#34;.PerformanceStats.Pool.Write_MBps=&#34;+Write_MBps
+				println pool+&#34;.PerformanceStats.Pool.Total_MBps=&#34;+Total_MBps
+				println pool+&#34;.PerformanceStats.Pool.Read_Ops=&#34;+Read_Ops
+				println pool+&#34;.PerformanceStats.Pool.Write_Ops=&#34;+Write_Ops
+				println pool+&#34;.PerformanceStats.Pool.Total_Ops=&#34;+Total_Ops
+				println pool+&#34;.PerformanceStats.Pool.Read_Latency=&#34;+Read_Latency
+				println pool+&#34;.PerformanceStats.Pool.Write_Latency=&#34;+Write_Latency
+				println pool+&#34;.PerformanceStats.Pool.Average_Latency=&#34;+Average_Latency
+			}
+		}
+	}
+	return(0);
+}
+
+//function to perform API request
+def APIrequest(endpoint_url,auth,method, pool_name=&#34;&#34;, post_reply=false){
+	// HTTP Get
+	def trustAllCerts = [
+		new X509TrustManager() {
+			public X509Certificate[] getAcceptedIssuers() {
+				return null
+			}
+
+			public void checkServerTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+			}
+
+			public void checkClientTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+			}
+		}
+	] as TrustManager[] 
+
+
+	SSLContext sc = SSLContext.getInstance(&#34;SSL&#34;);
+	sc.init(null, trustAllCerts, new SecureRandom());
+	CloseableHttpClient httpclient = HttpClients.custom().setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).setSslcontext(sc).build();
+
+	if(method==&#34;get&#34;){
+		httpGet = new HttpGet(endpoint_url); //SIMPLE GET - Without Params
+		httpGet.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //GET header
+		httpGet.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //GET header
+		response = httpclient.execute(httpGet); //GET response
+	}
+
+	if(method==&#34;post&#34;){
+		httpPost = new HttpPost(endpoint_url);
+		httpPost.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //POST header
+		httpPost.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //POST header
+
+		json = &#39;[&#39;+pool_name+&#39;]&#39;
+		entity = new StringEntity(json);
+		httpPost.setEntity(entity);//POST Entity (params)
+
+		//response = httpclient.execute(httpGet); //GET response
+		response = httpclient.execute(httpPost); //POST response
+	}
+
+	responseBody = EntityUtils.toString(response.getEntity());
+	code = response.getStatusLine().getStatusCode();
+
+	httpclient.close();
+
+	if(code==200){
+		if(method==&#34;get&#34;){
+			JSONArray response_ob = new JSONArray(responseBody);
+			return response_ob;//return response
+		}
+
+		if(method==&#34;post&#34;){
+			if(post_reply==false){
+				JSONArray response_ob = new JSONArray(responseBody);
+				return response_ob;//return response
+			}else{
+				reponseBody_raw = &#34;[&#34;+responseBody+&#34;]&#34; //ADD [] to expression (otherwise JSONArray fails)
+				JSONArray response_ob = new JSONArray(reponseBody_raw);
+				return response_ob;//return response
+			}
+		}
+	}else{
+		return(404);
+	}
+}
+
+//according to :
+//https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery
+//active discovery WILDVALUE cannot contain  [&#39;=&#39;,&#39;:&#39;,&#39;\&#39;,&#39;#&#39;,&#39;space&#39;] characters
+//the function below will get rid of those special characters if they exist
+def SpecialCharacterCheck(value){
+	//special characters not allowed in ActiveDiscovery
+	def specialCharacters = ~/\=|\:|\\|\#|\s/
+
+	//replace the special character by nothing &#38; return the &#39;new&#39; service name
+	value=value.replaceAll(specialCharacters, &#39;&#39;)
+	//println(service); //DEBUG
+
+	return value
+}</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowsscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowscmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxcmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        </attributes>
+        <datapoints>
+        <datapoint>
+            <name>usedByDataAndSnapshot</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.usedByDataAndSnapshot</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount used by data and snapshot after compression
+and deduplication (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>available</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.available</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount of available space left on the pool (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>compressionSavingsPercentage</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.compressionSavingsPercentage</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount saved from compression as a percentage.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>dedupeSavingsPercentage</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.dedupeSavingsPercentage</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount saved from deduplication as a percentage.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>originalUsedByDataAndSnapshot</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.originalUsedByDataAndSnapshot</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Original used by data and snapshot before
+compression and deduplication (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>totalMetaSize</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.totalMetaSize</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Total metadata size (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>totalPoolSize</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.totalPoolSize</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Total size of the pool (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>totalSavingsPercentage</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.totalSavingsPercentage</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount saved from compression and deduplication as
+a percentage.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>usedByAll</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.usedByAll</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount used for data and reservation (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>usedByData</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.usedByData</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount used by data after compression and
+deduplication (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>usedByReservation</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.usedByReservation</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount used by reservation (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>usedBySnapshot</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.usedBySnapshot</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount used by snapshot after compression and
+deduplication (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>usedMeta</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.usedMeta</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Used metadata (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>poolStorageUtilizationPercentage</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>(usedByAll/ totalPoolSize) * 100</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr>&#62;= 90 90 95</alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody>Pool ##INSTANCE## on Tegile Array ##HOST## has reported that ##VALUE## % of its storage capacity is now utilized, placing the pool into ##LEVEL## state.
+
+This started at ##START##, -- or ##DURATION## ago.</alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Percentage of pool storage capacity utilized.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>4</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_CacheDisk_Read_Latency</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.CacheDisk.Read_Latency</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Cache Disk -&#62; SSDs designated as read/write cache.
+
+Average disk read operation latency, in milliseconds.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_CacheDisk_Read_MBps</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.CacheDisk.Read_MBps</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Cache Disk -&#62; SSDs designated as read/write cache.
+
+Read data throughput, in megabytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_CacheDisk_Read_Ops</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.CacheDisk.Read_Ops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Cache Disk -&#62; SSDs designated as read/write cache.
+
+Disk data read operations per second.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_CacheDisk_Write_Latency</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.CacheDisk.Write_Latency</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Cache Disk -&#62; SSDs designated as read/write cache.
+
+Average disk write operation latency, in milliseconds.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_CacheDisk_Write_MBps</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.CacheDisk.Write_MBps</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Cache Disk -&#62; SSDs designated as read/write cache.
+
+Write data throughput, in megabytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_CacheDisk_Write_Ops</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.CacheDisk.Write_Ops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Cache Disk -&#62; SSDs designated as read/write cache.
+
+Disk data write operations per second.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_DataDisk_Read_Latency</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.DataDisk.Read_Latency</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Data Disk -&#62; Disks used for data-only. HDDs in hybrid pools.
+
+Average disk read operation latency, in milliseconds.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_DataDisk_Read_MBps</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.DataDisk.Read_MBps</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Data Disk -&#62; Disks used for data-only. HDDs in hybrid pools.
+
+Read data throughput, in megabytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_DataDisk_Read_Ops</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.DataDisk.Read_Ops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Data Disk -&#62; Disks used for data-only. HDDs in hybrid pools.
+
+Disk data read operations per second.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_DataDisk_Write_Latency</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.DataDisk.Write_Latency</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Data Disk -&#62; Disks used for data-only. HDDs in hybrid pools.
+
+Average disk write operation latency, in milliseconds.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_DataDisk_Write_MBps</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.DataDisk.Write_Mbps</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Data Disk -&#62; Disks used for data-only. HDDs in hybrid pools.
+
+Write data throughput, in megabytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_DataDisk_Write_Ops</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.DataDisk.Write_Ops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Data Disk -&#62; Disks used for data-only. HDDs in hybrid pools.
+
+Disk data write operations per second.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_IflashDisk_Read_Latency</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.IflashDisk.Read_Latency</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Iflash Disk -&#62; SSD disk type housing metadata and cache.
+
+Average disk read operation latency, in milliseconds.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_IflashDisk_Read_MBps</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.IflashDisk.Read_MBps</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Iflash Disk -&#62; SSD disk type housing metadata and cache.
+
+Read data throughput, in megabytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_IflashDisk_Read_Ops</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.IflashDisk.Read_Ops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Iflash Disk -&#62; SSD disk type housing metadata and cache.
+
+Disk data read operations per second.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_IflashDisk_Write_Latency</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.IflashDisk.Write_Latency</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Iflash Disk -&#62; SSD disk type housing metadata and cache.
+
+Average disk write operation latency, in milliseconds.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_IflashDisk_Write_MBps</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.IflashDisk.Write_MBps</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Iflash Disk -&#62; SSD disk type housing metadata and cache.
+
+Write data throughput, in megabytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_IflashDisk_Write_Ops</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.IflashDisk.Write_Ops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Iflash Disk -&#62; SSD disk type housing metadata and cache.
+
+Disk data write operations per second.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_MetaDisk_Read_Latency</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.MetaDisk.Read_Latency</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Meta Disk -&#62; SSDs designated for metadata only.
+
+Average disk read operation latency, in milliseconds.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_MetaDisk_Read_MBps</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.MetaDisk.Read_MBps</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Meta Disk -&#62; SSDs designated for metadata only.
+
+Read data throughput, in megabytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_MetaDisk_Read_Ops</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.MetaDisk.Read_Ops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Meta Disk -&#62; SSDs designated for metadata only.
+
+Disk data read operations per second.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_MetaDisk_Write_Latency</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.MetaDisk.Write_Latency</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Meta Disk -&#62; SSDs designated for metadata only.
+
+Average disk write operation latency, in milliseconds.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_MetaDisk_Write_MBps</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.MetaDisk.Write_MBps</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Meta Disk -&#62; SSDs designated for metadata only.
+
+Write data throughput, in megabytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_MetaDisk_Write_Ops</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.MetaDisk.Write_Ops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Meta Disk -&#62; SSDs designated for metadata only.
+
+Disk data write operations per second.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_Pool_Average_Latency</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.Pool.Average_Latency</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Average pool read/write operation latency, in milliseconds.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_Pool_Read_Latency</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.Pool.Read_Latency</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Average pool read operation latency, in milliseconds.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_Pool_Read_MBps</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.Pool.Read_MBps</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Storage pool data reads, in megabytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_Pool_Read_Ops</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.Pool.Read_Ops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Pool read operations per second.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_Pool_Total_MBps</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.Pool.Total_MBps</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Storage pool data write/read, in megabytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_Pool_Total_Ops</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.Pool.Total_Ops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Pool read/write operations per second.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_Pool_Write_Latency</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.Pool.Write_Latency</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Average pool write operation latency, in milliseconds.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_Pool_Write_MBps</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.Pool.Write_MBps</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Storage pool data reads, in megabytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_Pool_Write_Ops</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.PerformanceStats.Pool.Write_Ops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Pool read operations per second.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_CacheDisk_Read_Bytes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>PerformanceStats_CacheDisk_Read_MBps * 1024 * 1024</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Read data throughput, in bytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_CacheDisk_Write_Bytes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>PerformanceStats_CacheDisk_Write_MBps * 1024 * 1024</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Write data throughput, in bytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_DataDisk_Read_Bytes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>PerformanceStats_DataDisk_Read_MBps * 1024 * 1024</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Read data throughput, in bytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_DataDisk_Write_Bytes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>PerformanceStats_DataDisk_Write_MBps * 1024 * 1024</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Write data throughput, in bytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_IflashDisk_Read_Bytes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>PerformanceStats_IflashDisk_Read_MBps * 1024 * 1024</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Read data throughput, in bytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_IflashDisk_Write_Bytes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>PerformanceStats_IflashDisk_Write_MBps* 1024 * 1024</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Write data throughput, in bytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_MetaDisk_Read_Bytes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>PerformanceStats_MetaDisk_Read_MBps * 1024 * 1024</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Read data throughput, in bytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_MetaDisk_Write_Bytes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>PerformanceStats_MetaDisk_Write_MBps * 1024 * 1024</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Write data throughput, in bytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_Pool_Total_Bytes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>PerformanceStats_Pool_Total_MBps * 1024 * 1024</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Storage pool data write/read, in bytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_Pool_Read_Bytes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>PerformanceStats_Pool_Read_MBps * 1024 * 1024</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Storage pool data reads, in bytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>PerformanceStats_Pool_Write_Bytes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>PerformanceStats_Pool_Write_MBps * 1024 * 1024</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Storage pool data writes, in bytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>usedByData_Percentage</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>(usedByData/ totalPoolSize) * 100</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount used by data after compression and
+deduplication (percent).</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>usedByDataAndSnapshot_Percentage</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>(usedByDataAndSnapshot / totalPoolSize) * 100</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount used by data and snapshot after compression
+and deduplication  (percent).</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>usedByReservation_Percentage</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>(usedByReservation / totalPoolSize) * 100</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount used by reservation (percent).</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>usedBySnapshot_Percentage</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>(usedBySnapshot / totalPoolSize) * 100</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount used by snapshot after compression and
+deduplication (percent).</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>usedMeta_Percentage</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>(usedMeta / totalPoolSize) * 100</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Used metadata (percent).</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        </datapoints>
+        <graphs>
+        <graph>
+            <name>Pool IOPS</name>
+            <title>Pool IOPS</title>
+            <verticallabel>IOPS</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>3</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>PerformanceStats_Pool_Read_Ops</name>
+            <datapointname>PerformanceStats_Pool_Read_Ops</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>PerformanceStats_Pool_Write_Ops</name>
+            <datapointname>PerformanceStats_Pool_Write_Ops</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>Read</legend>
+                <color>navy</color>
+                <datapointname>PerformanceStats_Pool_Read_Ops</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Write</legend>
+                <color>green</color>
+                <datapointname>PerformanceStats_Pool_Write_Ops</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>Pool Latency</name>
+            <title>Pool Latency</title>
+            <verticallabel>milliseconds</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>5</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>PerformanceStats_Pool_Read_Latency</name>
+            <datapointname>PerformanceStats_Pool_Read_Latency</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>PerformanceStats_Pool_Write_Latency</name>
+            <datapointname>PerformanceStats_Pool_Write_Latency</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>Avg. Read</legend>
+                <color>blue</color>
+                <datapointname>PerformanceStats_Pool_Read_Latency</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Avg. Write</legend>
+                <color>olive</color>
+                <datapointname>PerformanceStats_Pool_Write_Latency</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>Pool Throughput</name>
+            <title>Pool Throughput</title>
+            <verticallabel>bytes/sec</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>4</displayprio>
+            <timescale>1day</timescale>
+            <base1024>true</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>PerformanceStats_Pool_Read_Bytes</name>
+            <datapointname>PerformanceStats_Pool_Read_Bytes</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>PerformanceStats_Pool_Write_Bytes</name>
+            <datapointname>PerformanceStats_Pool_Write_Bytes</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>Data Read</legend>
+                <color>silver</color>
+                <datapointname>PerformanceStats_Pool_Read_Bytes</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Data Write</legend>
+                <color>green</color>
+                <datapointname>PerformanceStats_Pool_Write_Bytes</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>Pool Utilization</name>
+            <title>Pool Utilization</title>
+            <verticallabel>%</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>100.0</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>1</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>poolStorageUtilizationPercentage</name>
+            <datapointname>poolStorageUtilizationPercentage</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>2</type>
+                <legend>Utilization Percentage</legend>
+                <color>red1</color>
+                <datapointname>poolStorageUtilizationPercentage</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>Pool Utilization_Detailed</name>
+            <title>Pool Utilization (Detailed)</title>
+            <verticallabel>%</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>2</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>usedByDataAndSnapshot_Percentage</name>
+            <datapointname>usedByDataAndSnapshot_Percentage</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>usedByData_Percentage</name>
+            <datapointname>usedByData_Percentage</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>usedByReservation_Percentage</name>
+            <datapointname>usedByReservation_Percentage</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>usedBySnapshot_Percentage</name>
+            <datapointname>usedBySnapshot_Percentage</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>usedMeta_Percentage</name>
+            <datapointname>usedMeta_Percentage</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>Used by data (after compression)</legend>
+                <color>orange</color>
+                <datapointname>usedByData_Percentage</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Used by dataset &#38; snapshot (before compression)</legend>
+                <color>silver</color>
+                <datapointname>usedByDataAndSnapshot_Percentage</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Used by reservation</legend>
+                <color>green</color>
+                <datapointname>usedByReservation_Percentage</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Used by snapshot (after compression)</legend>
+                <color>aqua</color>
+                <datapointname>usedBySnapshot_Percentage</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Used by metadata</legend>
+                <color>yellow</color>
+                <datapointname>usedMeta_Percentage</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        </graphs>
+        <overviewgraphs>
+        <overviewgraph>
+            <name>Pool IOPS</name>
+            <title>Pool IOPS</title>
+            <verticallabel>IOPS</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>2</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>PerformanceStats_Pool_Read_Ops</name>
+            <datapointname>PerformanceStats_Pool_Read_Ops</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+        <overviewgraphdatapoint>
+            <name>PerformanceStats_Pool_Write_Ops</name>
+            <datapointname>PerformanceStats_Pool_Write_Ops</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE## - Read</legend>
+                <datapointname>PerformanceStats_Pool_Read_Ops</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE## - Write</legend>
+                <datapointname>PerformanceStats_Pool_Write_Ops</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
+        <overviewgraph>
+            <name>Pool Latency</name>
+            <title>Pool Latency</title>
+            <verticallabel>milliseconds</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>4</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>PerformanceStats_Pool_Read_Latency</name>
+            <datapointname>PerformanceStats_Pool_Read_Latency</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+        <overviewgraphdatapoint>
+            <name>PerformanceStats_Pool_Write_Latency</name>
+            <datapointname>PerformanceStats_Pool_Write_Latency</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE## - Avg. Read</legend>
+                <datapointname>PerformanceStats_Pool_Read_Latency</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE## - Avg. Write</legend>
+                <datapointname>PerformanceStats_Pool_Write_Latency</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
+        <overviewgraph>
+            <name>Pool Throughput</name>
+            <title>Pool Throughput</title>
+            <verticallabel>bytes/sec</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>3</displayprio>
+            <timescale>1day</timescale>
+            <base1024>true</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>PerformanceStats_Pool_Read_Bytes</name>
+            <datapointname>PerformanceStats_Pool_Read_Bytes</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+        <overviewgraphdatapoint>
+            <name>PerformanceStats_Pool_Write_Bytes</name>
+            <datapointname>PerformanceStats_Pool_Write_Bytes</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE## - Data Read</legend>
+                <datapointname>PerformanceStats_Pool_Read_Bytes</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE## - Data Write</legend>
+                <datapointname>PerformanceStats_Pool_Write_Bytes</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
+        <overviewgraph>
+            <name>Pool Utilization</name>
+            <title>Pool Utilization</title>
+            <verticallabel>%</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>100.0</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>1</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>poolStorageUtilizationPercentage</name>
+            <datapointname>poolStorageUtilizationPercentage</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE## - Pool Usage</legend>
+                <datapointname>poolStorageUtilizationPercentage</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
+        </overviewgraphs>
+        <scripts>
+        </scripts>
+    </entry>
+</feed>

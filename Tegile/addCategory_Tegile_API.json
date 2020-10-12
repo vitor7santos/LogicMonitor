@@ -1,0 +1,46 @@
+{
+    "scheduleOption": 0,
+    "dataType": 0,
+    "description": "This property source will be applied to Tegile devices that we'll want to grab their metrics (via the API datasources)",
+    "appliesTo": "tegile.user && tegile.pass",
+    "technology": "",
+    "type": "propertyrule",
+    "params": [
+        {
+            "name": "linuxcmdline",
+            "comment": "",
+            "value": ""
+        },
+        {
+            "name": "linuxscript",
+            "comment": "",
+            "value": ""
+        },
+        {
+            "name": "scriptgroovy",
+            "comment": "",
+            "value": "import com.santaba.agent.groovyapi.expect.Expect;\r\nimport com.santaba.agent.groovyapi.snmp.Snmp;\r\nimport com.santaba.agent.groovyapi.http.*;\r\nimport com.santaba.agent.groovyapi.jmx.*;\r\nimport org.xbill.DNS.*;\r\n//ADDED MANUALLY\r\nimport org.apache.http.client.methods.CloseableHttpResponse\r\nimport org.apache.http.client.methods.HttpGet\r\nimport org.apache.http.client.methods.HttpPost\r\nimport org.apache.http.impl.client.CloseableHttpClient\r\nimport org.apache.http.impl.client.HttpClients\r\nimport org.apache.http.util.EntityUtils\r\nimport javax.net.ssl.X509TrustManager\r\nimport javax.net.ssl.TrustManager\r\nimport java.security.cert.X509Certificate\r\nimport java.security.cert.CertificateException\r\nimport javax.net.ssl.HostnameVerifier\r\nimport javax.net.ssl.HttpsURLConnection\r\nimport javax.net.ssl.SSLContext\r\nimport java.security.SecureRandom\r\nimport org.apache.http.conn.ssl.NoopHostnameVerifier\r\nimport org.apache.http.entity.StringEntity\r\nimport org.json.JSONObject\r\nimport org.json.JSONArray\r\nimport groovy.json.JsonOutput\r\n\r\n// get the host, credentials, and mgmt station baseurl from the device property table\r\nhostname = hostProps.get(\"system.hostname\");\r\nuserid = hostProps.get(\"tegile.user\");\r\npasswd = hostProps.get(\"tegile.pass\");\r\nbase_url = \"https://\" + hostname;\r\n//create auth Base64 encryption\r\nauth_raw = userid + \":\" + passwd\r\nauth = auth_raw.bytes.encodeBase64().toString()\r\n\t\t\r\n//get CPU data (pool level)\r\nendpoint_url = base_url + \"/zebi/api/v2/listSystemProperties\"; //GET POOL SPACE INFO\r\nmethod = \"post\"\r\npool_name = '[\"ZEBI_APPLIANCE_MODEL\", \"ZEBI_APPLIANCE_VERSION\", \"ZEBI_GUI_VERSION\", \"ZEBI_SUPPORTED_TDPS_API_VERSIONS\", \"ZEBI_API_VERSION\", \"INTELLIFLASH_ARRAY_FQDN\"]'\r\npost_reply=false\r\n\r\ngetSystemInfo = APIrequest(endpoint_url,auth,method,pool_name,post_reply)\r\n\r\nif (getSystemInfo != 404){\r\n\tprintln \"system.categories=Tegile\"\r\n\tprintln \"ApplianceModel=\"+getSystemInfo.get(0)\r\n\tprintln \"ApplianceVersion=\"+getSystemInfo.get(1)\r\n\tprintln \"ApplianceGUIVersion=\"+getSystemInfo.get(2)\r\n\tprintln \"ApplianceSupported_TDPS_API_Versions=\"+getSystemInfo.get(3)\r\n\tprintln \"ApplianceAPIVersion=\"+getSystemInfo.get(4)\r\n\tprintln \"ApplianceFQDN=\"+getSystemInfo.get(5)\r\n\r\n\treturn(0);\r\n}\r\n\r\n//function to perform API request\r\ndef APIrequest(endpoint_url,auth,method, pool_name=\"\", post_reply=false, jsonOutput=true){\r\n\t// HTTP Get\r\n\tdef trustAllCerts = [\r\n\t\tnew X509TrustManager() {\r\n\t\t\tpublic X509Certificate[] getAcceptedIssuers() {\r\n\t\t\t\treturn null\r\n\t\t\t}\r\n\r\n\t\t\tpublic void checkServerTrusted(X509Certificate[] certs, String authType) throws CertificateException {\r\n\t\t\t}\r\n\r\n\t\t\tpublic void checkClientTrusted(X509Certificate[] certs, String authType) throws CertificateException {\r\n\t\t\t}\r\n\t\t}\r\n\t] as TrustManager[] \r\n\r\n\r\n\tSSLContext sc = SSLContext.getInstance(\"SSL\");\r\n\tsc.init(null, trustAllCerts, new SecureRandom());\r\n\tCloseableHttpClient httpclient = HttpClients.custom().setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).setSslcontext(sc).build();\r\n\r\n\tif(method==\"get\"){\r\n\t\thttpGet = new HttpGet(endpoint_url); //SIMPLE GET - Without Params\r\n\t\thttpGet.addHeader(\"content-type\", \"application/json\"); //GET header\r\n\t\thttpGet.addHeader(\"Authorization\", \"Basic \"+auth); //GET header\r\n\t\tresponse = httpclient.execute(httpGet); //GET response\r\n\t}\r\n\r\n\tif(method==\"post\"){\r\n\t\thttpPost = new HttpPost(endpoint_url);\r\n\t\thttpPost.addHeader(\"content-type\", \"application/json\"); //POST header\r\n\t\thttpPost.addHeader(\"Authorization\", \"Basic \"+auth); //POST header\r\n\r\n\t\tjson = '['+pool_name+']'\r\n\t\tentity = new StringEntity(json);\r\n\t\thttpPost.setEntity(entity);//POST Entity (params)\r\n\r\n\t\t//response = httpclient.execute(httpGet); //GET response\r\n\t\tresponse = httpclient.execute(httpPost); //POST response\r\n\t}\r\n\r\n\tresponseBody = EntityUtils.toString(response.getEntity());\r\n\tcode = response.getStatusLine().getStatusCode();\r\n\r\n\thttpclient.close();\r\n\r\n\tif(code==200){\r\n\t\tif(method==\"get\"){\r\n\t\t\tif(jsonOutput==true){\r\n\t\t\t\tif(post_reply==false){\r\n\t\t\t\t\tJSONArray response_ob = new JSONArray(responseBody);\r\n\t\t\t\t\treturn response_ob;//return response\r\n\t\t\t\t}else{\r\n\t\t\t\t\treponseBody_raw = \"[\"+responseBody+\"]\" //ADD [] to expression (otherwise JSONArray fails)\r\n\t\t\t\t\tJSONArray response_ob = new JSONArray(reponseBody_raw);\r\n\t\t\t\t\treturn response_ob;//return response\r\n\t\t\t\t}\r\n\t\t\t}else{\r\n\t\t\t\treturn responseBody;\r\n\t\t\t}\r\n\t\t}\r\n\r\n\t\tif(method==\"post\"){\r\n\t\t\tif(post_reply==false){\r\n\t\t\t\tJSONArray response_ob = new JSONArray(responseBody);\r\n\t\t\t\treturn response_ob;//return response\r\n\t\t\t}else{\r\n\t\t\t\treponseBody_raw = \"[\"+responseBody+\"]\" //ADD [] to expression (otherwise JSONArray fails)\r\n\t\t\t\tJSONArray response_ob = new JSONArray(reponseBody_raw);\r\n\t\t\t\treturn response_ob;//return response\r\n\t\t\t}\r\n\t\t}\r\n\t}else{\r\n\t\treturn(404);\r\n\t}\r\n}\r\n\r\n//according to :\r\n//https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery\r\n//active discovery WILDVALUE cannot contain  ['=',':','\\','#','space'] characters\r\n//the function below will get rid of those special characters if they exist\r\ndef SpecialCharacterCheck(value){\r\n\t//special characters not allowed in ActiveDiscovery\r\n\tdef specialCharacters = ~/\\=|\\:|\\\\|\\#|\\s/\r\n\r\n\t//replace the special character by nothing & return the 'new' service name\r\n\tvalue=value.replaceAll(specialCharacters, '')\r\n\t//println(service); //DEBUG\r\n\r\n\treturn value\r\n}"
+        },
+        {
+            "name": "scripttype",
+            "comment": "embed",
+            "value": "embed"
+        },
+        {
+            "name": "windowscmdline",
+            "comment": "",
+            "value": ""
+        },
+        {
+            "name": "windowsscript",
+            "comment": "",
+            "value": ""
+        }
+    ],
+    "version": 1596102302,
+    "tags": "",
+    "auditVersion": 0,
+    "name": "addCategory_Tegile_API",
+    "id": 140,
+    "group": "Tegile - API"
+}

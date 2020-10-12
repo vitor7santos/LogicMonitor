@@ -1,0 +1,414 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<feed  version="1.0" hasPendingRequests="false" >
+  <company></company>
+  <status>200</status>
+  <errmsg>OK</errmsg>
+  <interval>0</interval>
+    <entry type="predatasource">
+        <version>1596111467</version>
+        <name>Tegile_IntelliFlash_Disks_API</name>
+        <displayedas>Disks</displayedas>
+        <description>Gets Tegile storage disks (API doesn&#39;t allow to get their HEALTH status) - Just collecting those for visibility</description>
+        <collector>batchscript</collector>
+        <hasMultiInstances>true</hasMultiInstances>
+        <schedule>300</schedule>
+        <appliesTo>hasCategory(&#34;Tegile&#34;)</appliesTo>
+        <wildcardauto>true</wildcardauto>
+        <wildcardpersist>false</wildcardpersist>
+        <wildcardlinuxscript>ad_script</wildcardlinuxscript>
+        <wildcardlinuxcmdline>type=&#34;embeded&#34; </wildcardlinuxcmdline>
+        <wildcardwinscript>ad_script</wildcardwinscript>
+        <wildcardwincmdline>type=&#34;embeded&#34; </wildcardwincmdline>
+        <wildcardgroovyscript>import com.santaba.agent.groovyapi.expect.Expect;
+import com.santaba.agent.groovyapi.snmp.Snmp;
+import com.santaba.agent.groovyapi.http.*;
+import com.santaba.agent.groovyapi.jmx.*;
+import org.xbill.DNS.*;
+//ADDED MANUALLY
+import org.apache.http.client.methods.CloseableHttpResponse
+import org.apache.http.client.methods.HttpGet
+import org.apache.http.client.methods.HttpPost
+import org.apache.http.impl.client.CloseableHttpClient
+import org.apache.http.impl.client.HttpClients
+import org.apache.http.util.EntityUtils
+import javax.net.ssl.X509TrustManager
+import javax.net.ssl.TrustManager
+import java.security.cert.X509Certificate
+import java.security.cert.CertificateException
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import java.security.SecureRandom
+import org.apache.http.conn.ssl.NoopHostnameVerifier
+import org.apache.http.entity.StringEntity
+import org.json.JSONObject
+import org.json.JSONArray
+
+// get the host, credentials, and mgmt station baseurl from the device property table
+hostname = hostProps.get(&#34;system.hostname&#34;);
+userid = hostProps.get(&#34;tegile.user&#34;);
+passwd = hostProps.get(&#34;tegile.pass&#34;);
+base_url = &#34;https://&#34; + hostname;
+//create auth Base64 encryption
+auth_raw = userid + &#34;:&#34; + passwd
+auth = auth_raw.bytes.encodeBase64().toString()
+
+// construct the full endpoint url
+endpoint_url = base_url + &#34;/zebi/api/v2/getDisks&#34;; //LIST DISKS
+method = &#34;post&#34;
+pool_name = &#34;.*&#34;
+
+get_disks = APIrequest(endpoint_url,auth,method,pool_name)
+
+if (get_disks != 404){
+	// iterate over the json_object 
+	for (int i=0; i&#60;get_disks.length();i++){
+		JSONObject obj = get_disks.get(i);
+
+		diskChassisIndex=obj[&#34;diskChassisIndex&#34;];
+		diskBayIndex=obj[&#34;diskBayIndex&#34;];
+		diskChassisName=obj.getString(&#34;diskChassisName&#34;);
+		diskSize=obj.getString(&#34;diskSize&#34;);
+		poolName=obj.getString(&#34;poolName&#34;);
+		diskType=obj.getString(&#34;diskType&#34;);
+		diskAlias=obj.getString(&#34;diskAlias&#34;);
+		deviceId=obj.getString(&#34;deviceId&#34;);
+		
+		wildvalue = diskChassisIndex+&#34;.&#34;+diskBayIndex //construct the wildvalue for the Disk (to be presented on LM [chassis.bay]
+		
+		println wildvalue+&#34;##&#34;+wildvalue+&#34;##Pool - &#34;+poolName+&#34; | Alias - &#34;+diskAlias+&#34;####auto.disk.alias=&#34;+diskAlias+&#34;&#38;auto.disk.pool=&#34;+poolName+&#34;&#38;auto.disk.type=&#34;+diskType+&#34;&#38;auto.disk.size=&#34;+diskSize+&#34;&#38;auto.disk.deviceId=&#34;+deviceId
+	}
+	return(0);
+}
+
+//function to perform API request
+def APIrequest(endpoint_url,auth,method, pool_name=&#34;&#34;){
+	// HTTP Get
+	def trustAllCerts = [
+		new X509TrustManager() {
+			public X509Certificate[] getAcceptedIssuers() {
+				return null
+			}
+
+			public void checkServerTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+			}
+
+			public void checkClientTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+			}
+		}
+	] as TrustManager[] 
+
+
+	SSLContext sc = SSLContext.getInstance(&#34;SSL&#34;);
+	sc.init(null, trustAllCerts, new SecureRandom());
+	CloseableHttpClient httpclient = HttpClients.custom().setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).setSslcontext(sc).build();
+
+	if(method==&#34;get&#34;){
+		httpGet = new HttpGet(endpoint_url); //SIMPLE GET - Without Params
+		httpGet.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //GET header
+		httpGet.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //GET header
+		response = httpclient.execute(httpGet); //GET response
+	}
+
+	if(method==&#34;post&#34;){
+		httpPost = new HttpPost(endpoint_url);
+		httpPost.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //POST header
+		httpPost.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //POST header
+
+		json = &#39;[&#34;&#39;+pool_name+&#39;&#34;]&#39;
+		entity = new StringEntity(json);
+		httpPost.setEntity(entity);//POST Entity (params)
+
+		//response = httpclient.execute(httpGet); //GET response
+		response = httpclient.execute(httpPost); //POST response
+	}
+
+	responseBody = EntityUtils.toString(response.getEntity());
+	code = response.getStatusLine().getStatusCode();
+
+	httpclient.close();
+
+	if(code==200){
+		if(method==&#34;get&#34;){
+			JSONArray response_ob = new JSONArray(responseBody);
+			return response_ob;//return response
+		}
+
+		if(method==&#34;post&#34;){
+			JSONArray response_ob = new JSONArray(responseBody);
+			return response_ob;//return response
+		}
+	}else{
+		return(404);
+	}
+}
+
+//according to :
+//https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery
+//active discovery WILDVALUE cannot contain  [&#39;=&#39;,&#39;:&#39;,&#39;\&#39;,&#39;#&#39;,&#39;space&#39;] characters
+//the function below will get rid of those special characters if they exist
+def SpecialCharacterCheck(value){
+	//special characters not allowed in ActiveDiscovery
+	def specialCharacters = ~/\=|\:|\\|\#|\s/
+
+	//replace the special character by nothing &#38; return the &#39;new&#39; service name
+	value=value.replaceAll(specialCharacters, &#39;&#39;)
+	//println(service); //DEBUG
+
+	return value
+}</wildcardgroovyscript>
+        <wildcardschedule>60</wildcardschedule>
+        <wildcarddisable>false</wildcarddisable>
+        <wildcarddeleteinactive>false</wildcarddeleteinactive>
+        <agdmethod>ilp</agdmethod>
+        <agdparams>auto.disk.type</agdparams>
+        <group>Tegile - API</group>
+        <tags></tags>
+        <technology>Developed by AS staff (Vitor Santos - 07/30/2020)
+
+##Making use of IntelliFlash API v2.3/2.4
+
+Using the module(s) below:
+
+getDisks;</technology>
+        <adlist><![CDATA[{"agdmethod":"ilp","method":"ad_script","agdparams":"auto.disk.type","id":0,"filters":[],"params":{"type":"embeded","groovyscript":"import com.santaba.agent.groovyapi.expect.Expect;\r\nimport com.santaba.agent.groovyapi.snmp.Snmp;\r\nimport com.santaba.agent.groovyapi.http.*;\r\nimport com.santaba.agent.groovyapi.jmx.*;\r\nimport org.xbill.DNS.*;\r\n//ADDED MANUALLY\r\nimport org.apache.http.client.methods.CloseableHttpResponse\r\nimport org.apache.http.client.methods.HttpGet\r\nimport org.apache.http.client.methods.HttpPost\r\nimport org.apache.http.impl.client.CloseableHttpClient\r\nimport org.apache.http.impl.client.HttpClients\r\nimport org.apache.http.util.EntityUtils\r\nimport javax.net.ssl.X509TrustManager\r\nimport javax.net.ssl.TrustManager\r\nimport java.security.cert.X509Certificate\r\nimport java.security.cert.CertificateException\r\nimport javax.net.ssl.HostnameVerifier\r\nimport javax.net.ssl.HttpsURLConnection\r\nimport javax.net.ssl.SSLContext\r\nimport java.security.SecureRandom\r\nimport org.apache.http.conn.ssl.NoopHostnameVerifier\r\nimport org.apache.http.entity.StringEntity\r\nimport org.json.JSONObject\r\nimport org.json.JSONArray\r\n\r\n// get the host, credentials, and mgmt station baseurl from the device property table\r\nhostname = hostProps.get(\"system.hostname\");\r\nuserid = hostProps.get(\"tegile.user\");\r\npasswd = hostProps.get(\"tegile.pass\");\r\nbase_url = \"https://\" + hostname;\r\n//create auth Base64 encryption\r\nauth_raw = userid + \":\" + passwd\r\nauth = auth_raw.bytes.encodeBase64().toString()\r\n\r\n// construct the full endpoint url\r\nendpoint_url = base_url + \"/zebi/api/v2/getDisks\"; //LIST DISKS\r\nmethod = \"post\"\r\npool_name = \".*\"\r\n\r\nget_disks = APIrequest(endpoint_url,auth,method,pool_name)\r\n\r\nif (get_disks != 404){\r\n\t// iterate over the json_object \r\n\tfor (int i=0; i<get_disks.length();i++){\r\n\t\tJSONObject obj = get_disks.get(i);\r\n\r\n\t\tdiskChassisIndex=obj[\"diskChassisIndex\"];\r\n\t\tdiskBayIndex=obj[\"diskBayIndex\"];\r\n\t\tdiskChassisName=obj.getString(\"diskChassisName\");\r\n\t\tdiskSize=obj.getString(\"diskSize\");\r\n\t\tpoolName=obj.getString(\"poolName\");\r\n\t\tdiskType=obj.getString(\"diskType\");\r\n\t\tdiskAlias=obj.getString(\"diskAlias\");\r\n\t\tdeviceId=obj.getString(\"deviceId\");\r\n\t\t\r\n\t\twildvalue = diskChassisIndex+\".\"+diskBayIndex //construct the wildvalue for the Disk (to be presented on LM [chassis.bay]\r\n\t\t\r\n\t\tprintln wildvalue+\"##\"+wildvalue+\"##Pool - \"+poolName+\" | Alias - \"+diskAlias+\"####auto.disk.alias=\"+diskAlias+\"&auto.disk.pool=\"+poolName+\"&auto.disk.type=\"+diskType+\"&auto.disk.size=\"+diskSize+\"&auto.disk.deviceId=\"+deviceId\r\n\t}\r\n\treturn(0);\r\n}\r\n\r\n//function to perform API request\r\ndef APIrequest(endpoint_url,auth,method, pool_name=\"\"){\r\n\t// HTTP Get\r\n\tdef trustAllCerts = [\r\n\t\tnew X509TrustManager() {\r\n\t\t\tpublic X509Certificate[] getAcceptedIssuers() {\r\n\t\t\t\treturn null\r\n\t\t\t}\r\n\r\n\t\t\tpublic void checkServerTrusted(X509Certificate[] certs, String authType) throws CertificateException {\r\n\t\t\t}\r\n\r\n\t\t\tpublic void checkClientTrusted(X509Certificate[] certs, String authType) throws CertificateException {\r\n\t\t\t}\r\n\t\t}\r\n\t] as TrustManager[] \r\n\r\n\r\n\tSSLContext sc = SSLContext.getInstance(\"SSL\");\r\n\tsc.init(null, trustAllCerts, new SecureRandom());\r\n\tCloseableHttpClient httpclient = HttpClients.custom().setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).setSslcontext(sc).build();\r\n\r\n\tif(method==\"get\"){\r\n\t\thttpGet = new HttpGet(endpoint_url); //SIMPLE GET - Without Params\r\n\t\thttpGet.addHeader(\"content-type\", \"application/json\"); //GET header\r\n\t\thttpGet.addHeader(\"Authorization\", \"Basic \"+auth); //GET header\r\n\t\tresponse = httpclient.execute(httpGet); //GET response\r\n\t}\r\n\r\n\tif(method==\"post\"){\r\n\t\thttpPost = new HttpPost(endpoint_url);\r\n\t\thttpPost.addHeader(\"content-type\", \"application/json\"); //POST header\r\n\t\thttpPost.addHeader(\"Authorization\", \"Basic \"+auth); //POST header\r\n\r\n\t\tjson = '[\"'+pool_name+'\"]'\r\n\t\tentity = new StringEntity(json);\r\n\t\thttpPost.setEntity(entity);//POST Entity (params)\r\n\r\n\t\t//response = httpclient.execute(httpGet); //GET response\r\n\t\tresponse = httpclient.execute(httpPost); //POST response\r\n\t}\r\n\r\n\tresponseBody = EntityUtils.toString(response.getEntity());\r\n\tcode = response.getStatusLine().getStatusCode();\r\n\r\n\thttpclient.close();\r\n\r\n\tif(code==200){\r\n\t\tif(method==\"get\"){\r\n\t\t\tJSONArray response_ob = new JSONArray(responseBody);\r\n\t\t\treturn response_ob;//return response\r\n\t\t}\r\n\r\n\t\tif(method==\"post\"){\r\n\t\t\tJSONArray response_ob = new JSONArray(responseBody);\r\n\t\t\treturn response_ob;//return response\r\n\t\t}\r\n\t}else{\r\n\t\treturn(404);\r\n\t}\r\n}\r\n\r\n//according to :\r\n//https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery\r\n//active discovery WILDVALUE cannot contain  ['=',':','\\','#','space'] characters\r\n//the function below will get rid of those special characters if they exist\r\ndef SpecialCharacterCheck(value){\r\n\t//special characters not allowed in ActiveDiscovery\r\n\tdef specialCharacters = ~/\\=|\\:|\\\\|\\#|\\s/\r\n\r\n\t//replace the special character by nothing & return the 'new' service name\r\n\tvalue=value.replaceAll(specialCharacters, '')\r\n\t//println(service); //DEBUG\r\n\r\n\treturn value\r\n}"}}]]></adlist>
+        <schemaVersion>2</schemaVersion>
+        <dataSourceType>1</dataSourceType>
+        <attributes>
+        <attribute>
+            <name>scripttype</name>
+            <value>embed</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>scriptgroovy</name>
+            <value>import com.santaba.agent.groovyapi.expect.Expect;
+import com.santaba.agent.groovyapi.snmp.Snmp;
+import com.santaba.agent.groovyapi.http.*;
+import com.santaba.agent.groovyapi.jmx.*;
+import org.xbill.DNS.*;
+//ADDED MANUALLY
+import org.apache.http.client.methods.CloseableHttpResponse
+import org.apache.http.client.methods.HttpGet
+import org.apache.http.client.methods.HttpPost
+import org.apache.http.impl.client.CloseableHttpClient
+import org.apache.http.impl.client.HttpClients
+import org.apache.http.util.EntityUtils
+import javax.net.ssl.X509TrustManager
+import javax.net.ssl.TrustManager
+import java.security.cert.X509Certificate
+import java.security.cert.CertificateException
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import java.security.SecureRandom
+import org.apache.http.conn.ssl.NoopHostnameVerifier
+import org.apache.http.entity.StringEntity
+import org.json.JSONObject
+import org.json.JSONArray
+
+// get the host, credentials, and mgmt station baseurl from the device property table
+hostname = hostProps.get(&#34;system.hostname&#34;);
+userid = hostProps.get(&#34;tegile.user&#34;);
+passwd = hostProps.get(&#34;tegile.pass&#34;);
+base_url = &#34;https://&#34; + hostname;
+//create auth Base64 encryption
+auth_raw = userid + &#34;:&#34; + passwd
+auth = auth_raw.bytes.encodeBase64().toString()
+
+// construct the full endpoint url
+endpoint_url = base_url + &#34;/zebi/api/v2/getDisks&#34;; //LIST DISKS
+method = &#34;post&#34;
+pool_name = &#39;&#34;.*&#34;&#39;
+post_reply=false
+
+get_disks = APIrequest(endpoint_url,auth,method,pool_name,post_reply)
+
+if (get_disks != 404){
+	// iterate over the json_object 
+	for (int i=0; i&#60;get_disks.length();i++){
+		JSONObject obj = get_disks.get(i);
+
+		diskChassisIndex=obj[&#34;diskChassisIndex&#34;];
+		diskBayIndex=obj[&#34;diskBayIndex&#34;];
+		diskAlias=obj.getString(&#34;diskAlias&#34;);
+		
+		wildvalue = diskChassisIndex+&#34;.&#34;+diskBayIndex //construct the wildvalue for the Disk (to be presented on LM [chassis.bay]
+
+		println wildvalue+&#34;.diskChassisIndex=&#34;+diskChassisIndex
+		println wildvalue+&#34;.diskBayIndex=&#34;+diskBayIndex
+	}
+
+	return(0);
+}
+
+//function to perform API request
+def APIrequest(endpoint_url,auth,method, pool_name=&#34;&#34;,post_reply=false){
+	// HTTP Get
+	def trustAllCerts = [
+		new X509TrustManager() {
+			public X509Certificate[] getAcceptedIssuers() {
+				return null
+			}
+
+			public void checkServerTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+			}
+
+			public void checkClientTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+			}
+		}
+	] as TrustManager[] 
+
+
+	SSLContext sc = SSLContext.getInstance(&#34;SSL&#34;);
+	sc.init(null, trustAllCerts, new SecureRandom());
+	CloseableHttpClient httpclient = HttpClients.custom().setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).setSslcontext(sc).build();
+
+	if(method==&#34;get&#34;){
+		httpGet = new HttpGet(endpoint_url); //SIMPLE GET - Without Params
+		httpGet.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //GET header
+		httpGet.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //GET header
+		response = httpclient.execute(httpGet); //GET response
+	}
+
+	if(method==&#34;post&#34;){
+		httpPost = new HttpPost(endpoint_url);
+		httpPost.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //POST header
+		httpPost.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //POST header
+
+		json = &#39;[&#39;+pool_name+&#39;]&#39;
+		entity = new StringEntity(json);
+		httpPost.setEntity(entity);//POST Entity (params)
+
+		response = httpclient.execute(httpPost); //POST response
+	}
+
+	responseBody = EntityUtils.toString(response.getEntity());
+	code = response.getStatusLine().getStatusCode();
+
+	httpclient.close();
+
+	if(code==200){
+		if(method==&#34;get&#34;){
+			JSONArray response_ob = new JSONArray(responseBody);
+			return response_ob;//return response
+		}
+
+		if(method==&#34;post&#34;){
+			if(post_reply == false){
+				JSONArray response_ob = new JSONArray(responseBody);
+				return response_ob;//return response
+			}else{
+				responseBody_raw = &#39;[&#39;+responseBody+&#39;]&#39;
+				JSONArray response_ob = new JSONArray(responseBody_raw);
+				return response_ob;//return response
+			}
+		}
+	}else{
+		return(404);
+	}
+}
+
+//according to :
+//https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery
+//active discovery WILDVALUE cannot contain  [&#39;=&#39;,&#39;:&#39;,&#39;\&#39;,&#39;#&#39;,&#39;space&#39;] characters
+//the function below will get rid of those special characters if they exist
+def SpecialCharacterCheck(value){
+	//special characters not allowed in ActiveDiscovery
+	def specialCharacters = ~/\=|\:|\\|\#|\s/
+
+	//replace the special character by nothing &#38; return the &#39;new&#39; service name
+	value=value.replaceAll(specialCharacters, &#39;&#39;)
+	//println(service); //DEBUG
+
+	return value
+}</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowsscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowscmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxcmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        </attributes>
+        <datapoints>
+        <datapoint>
+            <name>diskChassisIndex</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.diskChassisIndex</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Index of the chassis to enumerate, as listed by getDisks
+API.</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>diskBayIndex</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.diskBayIndex</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Disk bay index relative to each disk chassis (as listed by
+the Web UI, and is zero relative).</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        </datapoints>
+        <graphs>
+        </graphs>
+        <overviewgraphs>
+        </overviewgraphs>
+        <scripts>
+        </scripts>
+    </entry>
+</feed>

@@ -1,0 +1,1667 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<feed  version="1.0" hasPendingRequests="false" >
+  <company></company>
+  <status>200</status>
+  <errmsg>OK</errmsg>
+  <interval>0</interval>
+    <entry type="predatasource">
+        <version>1596110071</version>
+        <name>Tegile_IntelliFlash_Projects_API</name>
+        <displayedas>Projects</displayedas>
+        <description>Monitors Tegile project storage/data metrics.
+
+Tegile Projects are common organizational templates that create logical containers for volumes based on their specific purpose – like virtual desktop images and file shares.</description>
+        <collector>batchscript</collector>
+        <hasMultiInstances>true</hasMultiInstances>
+        <schedule>300</schedule>
+        <appliesTo>hasCategory(&#34;Tegile&#34;)</appliesTo>
+        <wildcardauto>true</wildcardauto>
+        <wildcardpersist>false</wildcardpersist>
+        <wildcardlinuxscript>ad_script</wildcardlinuxscript>
+        <wildcardlinuxcmdline>type=&#34;embeded&#34; </wildcardlinuxcmdline>
+        <wildcardwinscript>ad_script</wildcardwinscript>
+        <wildcardwincmdline>type=&#34;embeded&#34; </wildcardwincmdline>
+        <wildcardgroovyscript>import com.santaba.agent.groovyapi.expect.Expect;
+import com.santaba.agent.groovyapi.snmp.Snmp;
+import com.santaba.agent.groovyapi.http.*;
+import com.santaba.agent.groovyapi.jmx.*;
+import org.xbill.DNS.*;
+//ADDED MANUALLY
+import org.apache.http.client.methods.CloseableHttpResponse
+import org.apache.http.client.methods.HttpGet
+import org.apache.http.client.methods.HttpPost
+import org.apache.http.impl.client.CloseableHttpClient
+import org.apache.http.impl.client.HttpClients
+import org.apache.http.util.EntityUtils
+import javax.net.ssl.X509TrustManager
+import javax.net.ssl.TrustManager
+import java.security.cert.X509Certificate
+import java.security.cert.CertificateException
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import java.security.SecureRandom
+import org.apache.http.conn.ssl.NoopHostnameVerifier
+import org.apache.http.entity.StringEntity
+import org.json.JSONObject
+import org.json.JSONArray
+import groovy.json.JsonOutput
+
+// get the host, credentials, and mgmt station baseurl from the device property table
+hostname = hostProps.get(&#34;system.hostname&#34;);
+userid = hostProps.get(&#34;tegile.user&#34;);
+passwd = hostProps.get(&#34;tegile.pass&#34;);
+base_url = &#34;https://&#34; + hostname;
+//create auth Base64 encryption
+auth_raw = userid + &#34;:&#34; + passwd
+auth = auth_raw.bytes.encodeBase64().toString()
+
+poolArray=[]
+
+// construct the full endpoint url
+endpoint_url = base_url + &#34;/zebi/api/v2/listPools&#34;; //LIST POOLS
+method = &#34;get&#34;
+get_pools = APIrequest(endpoint_url,auth,method)
+
+if (get_pools != 404){
+	// iterate over the json_object 
+	for (int i=0; i&#60;get_pools.length();i++){
+		JSONObject obj = get_pools.get(i);
+
+		pool_name = obj.getString(&#34;name&#34;);
+		poolArray.add(pool_name) //store the pool in the poolArray (to further iterate over it)
+	}
+
+	//iterate over the newly built pool(s) array
+	poolArray.each{
+		pool_iterate=it
+
+		//query the projects for the Pool in question
+		endpoint_url = base_url + &#34;/zebi/api/v2/listProjects&#34;; //LIST POOLS
+		method = &#34;post&#34;
+		pool_name=&#39;&#34;&#39;+pool_iterate+&#39;&#34;, true&#39;
+		post_reply=false
+		get_projects_withinPool = APIrequest(endpoint_url,auth,method,pool_name,post_reply)
+	
+		for (int i=0; i&#60;get_projects_withinPool.length();i++){
+			JSONObject obj = get_projects_withinPool.get(i);
+
+			projectName = obj[&#34;name&#34;]
+			projectName_wildvalue = SpecialCharacterCheck(projectName)
+
+			println projectName_wildvalue+&#34;##&#34;+projectName+&#34;##&#34;+pool_iterate
+		}
+	}
+
+	return(0);
+}
+
+//function to perform API request
+def APIrequest(endpoint_url,auth,method, pool_name=&#34;&#34;, post_reply=false, jsonOutput=true){
+	// HTTP Get
+	def trustAllCerts = [
+		new X509TrustManager() {
+			public X509Certificate[] getAcceptedIssuers() {
+				return null
+			}
+
+			public void checkServerTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+			}
+
+			public void checkClientTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+			}
+		}
+	] as TrustManager[] 
+
+
+	SSLContext sc = SSLContext.getInstance(&#34;SSL&#34;);
+	sc.init(null, trustAllCerts, new SecureRandom());
+	CloseableHttpClient httpclient = HttpClients.custom().setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).setSslcontext(sc).build();
+
+	if(method==&#34;get&#34;){
+		httpGet = new HttpGet(endpoint_url); //SIMPLE GET - Without Params
+		httpGet.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //GET header
+		httpGet.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //GET header
+		response = httpclient.execute(httpGet); //GET response
+	}
+
+	if(method==&#34;post&#34;){
+		httpPost = new HttpPost(endpoint_url);
+		httpPost.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //POST header
+		httpPost.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //POST header
+
+		json = &#39;[&#39;+pool_name+&#39;]&#39;
+		entity = new StringEntity(json);
+		httpPost.setEntity(entity);//POST Entity (params)
+
+		//response = httpclient.execute(httpGet); //GET response
+		response = httpclient.execute(httpPost); //POST response
+	}
+
+	responseBody = EntityUtils.toString(response.getEntity());
+	code = response.getStatusLine().getStatusCode();
+
+	httpclient.close();
+
+	if(code==200){
+		if(method==&#34;get&#34;){
+			if(jsonOutput==true){
+				if(post_reply==false){
+					JSONArray response_ob = new JSONArray(responseBody);
+					return response_ob;//return response
+				}else{
+					reponseBody_raw = &#34;[&#34;+responseBody+&#34;]&#34; //ADD [] to expression (otherwise JSONArray fails)
+					JSONArray response_ob = new JSONArray(reponseBody_raw);
+					return response_ob;//return response
+				}
+			}else{
+				return responseBody;
+			}
+		}
+
+		if(method==&#34;post&#34;){
+			if(post_reply==false){
+				JSONArray response_ob = new JSONArray(responseBody);
+				return response_ob;//return response
+			}else{
+				reponseBody_raw = &#34;[&#34;+responseBody+&#34;]&#34; //ADD [] to expression (otherwise JSONArray fails)
+				JSONArray response_ob = new JSONArray(reponseBody_raw);
+				return response_ob;//return response
+			}
+		}
+	}else{
+		return(404);
+	}
+}
+
+//according to :
+//https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery
+//active discovery WILDVALUE cannot contain  [&#39;=&#39;,&#39;:&#39;,&#39;\&#39;,&#39;#&#39;,&#39;space&#39;] characters
+//the function below will get rid of those special characters if they exist
+def SpecialCharacterCheck(value){
+	//special characters not allowed in ActiveDiscovery
+	def specialCharacters = ~/\=|\:|\\|\#|\s/
+
+	//replace the special character by nothing &#38; return the &#39;new&#39; service name
+	value=value.replaceAll(specialCharacters, &#39;&#39;)
+	//println(service); //DEBUG
+
+	return value
+}</wildcardgroovyscript>
+        <wildcardschedule>60</wildcardschedule>
+        <wildcarddisable>false</wildcarddisable>
+        <wildcarddeleteinactive>false</wildcarddeleteinactive>
+        <agdmethod>none</agdmethod>
+        <agdparams></agdparams>
+        <group>Tegile - API</group>
+        <tags></tags>
+        <technology>Developed by AS staff (Vitor Santos - 07/30/2020)
+
+##Making use of IntelliFlash API v2.3/2.4
+
+Using the module(s) below:
+
+listPools;
+listProjects;
+getProject;
+getOneMinuteDataAnalyticsHistory;
+getDatasetSpaceInfo;</technology>
+        <adlist><![CDATA[{"agdmethod":"none","method":"ad_script","agdparams":"","id":0,"filters":[],"params":{"type":"embeded","groovyscript":"import com.santaba.agent.groovyapi.expect.Expect;\r\nimport com.santaba.agent.groovyapi.snmp.Snmp;\r\nimport com.santaba.agent.groovyapi.http.*;\r\nimport com.santaba.agent.groovyapi.jmx.*;\r\nimport org.xbill.DNS.*;\r\n//ADDED MANUALLY\r\nimport org.apache.http.client.methods.CloseableHttpResponse\r\nimport org.apache.http.client.methods.HttpGet\r\nimport org.apache.http.client.methods.HttpPost\r\nimport org.apache.http.impl.client.CloseableHttpClient\r\nimport org.apache.http.impl.client.HttpClients\r\nimport org.apache.http.util.EntityUtils\r\nimport javax.net.ssl.X509TrustManager\r\nimport javax.net.ssl.TrustManager\r\nimport java.security.cert.X509Certificate\r\nimport java.security.cert.CertificateException\r\nimport javax.net.ssl.HostnameVerifier\r\nimport javax.net.ssl.HttpsURLConnection\r\nimport javax.net.ssl.SSLContext\r\nimport java.security.SecureRandom\r\nimport org.apache.http.conn.ssl.NoopHostnameVerifier\r\nimport org.apache.http.entity.StringEntity\r\nimport org.json.JSONObject\r\nimport org.json.JSONArray\r\nimport groovy.json.JsonOutput\r\n\r\n// get the host, credentials, and mgmt station baseurl from the device property table\r\nhostname = hostProps.get(\"system.hostname\");\r\nuserid = hostProps.get(\"tegile.user\");\r\npasswd = hostProps.get(\"tegile.pass\");\r\nbase_url = \"https://\" + hostname;\r\n//create auth Base64 encryption\r\nauth_raw = userid + \":\" + passwd\r\nauth = auth_raw.bytes.encodeBase64().toString()\r\n\r\npoolArray=[]\r\n\r\n// construct the full endpoint url\r\nendpoint_url = base_url + \"/zebi/api/v2/listPools\"; //LIST POOLS\r\nmethod = \"get\"\r\nget_pools = APIrequest(endpoint_url,auth,method)\r\n\r\nif (get_pools != 404){\r\n\t// iterate over the json_object \r\n\tfor (int i=0; i<get_pools.length();i++){\r\n\t\tJSONObject obj = get_pools.get(i);\r\n\r\n\t\tpool_name = obj.getString(\"name\");\r\n\t\tpoolArray.add(pool_name) //store the pool in the poolArray (to further iterate over it)\r\n\t}\r\n\r\n\t//iterate over the newly built pool(s) array\r\n\tpoolArray.each{\r\n\t\tpool_iterate=it\r\n\r\n\t\t//query the projects for the Pool in question\r\n\t\tendpoint_url = base_url + \"/zebi/api/v2/listProjects\"; //LIST POOLS\r\n\t\tmethod = \"post\"\r\n\t\tpool_name='\"'+pool_iterate+'\", true'\r\n\t\tpost_reply=false\r\n\t\tget_projects_withinPool = APIrequest(endpoint_url,auth,method,pool_name,post_reply)\r\n\t\r\n\t\tfor (int i=0; i<get_projects_withinPool.length();i++){\r\n\t\t\tJSONObject obj = get_projects_withinPool.get(i);\r\n\r\n\t\t\tprojectName = obj[\"name\"]\r\n\t\t\tprojectName_wildvalue = SpecialCharacterCheck(projectName)\r\n\r\n\t\t\tprintln projectName_wildvalue+\"##\"+projectName+\"##\"+pool_iterate\r\n\t\t}\r\n\t}\r\n\r\n\treturn(0);\r\n}\r\n\r\n//function to perform API request\r\ndef APIrequest(endpoint_url,auth,method, pool_name=\"\", post_reply=false, jsonOutput=true){\r\n\t// HTTP Get\r\n\tdef trustAllCerts = [\r\n\t\tnew X509TrustManager() {\r\n\t\t\tpublic X509Certificate[] getAcceptedIssuers() {\r\n\t\t\t\treturn null\r\n\t\t\t}\r\n\r\n\t\t\tpublic void checkServerTrusted(X509Certificate[] certs, String authType) throws CertificateException {\r\n\t\t\t}\r\n\r\n\t\t\tpublic void checkClientTrusted(X509Certificate[] certs, String authType) throws CertificateException {\r\n\t\t\t}\r\n\t\t}\r\n\t] as TrustManager[] \r\n\r\n\r\n\tSSLContext sc = SSLContext.getInstance(\"SSL\");\r\n\tsc.init(null, trustAllCerts, new SecureRandom());\r\n\tCloseableHttpClient httpclient = HttpClients.custom().setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).setSslcontext(sc).build();\r\n\r\n\tif(method==\"get\"){\r\n\t\thttpGet = new HttpGet(endpoint_url); //SIMPLE GET - Without Params\r\n\t\thttpGet.addHeader(\"content-type\", \"application/json\"); //GET header\r\n\t\thttpGet.addHeader(\"Authorization\", \"Basic \"+auth); //GET header\r\n\t\tresponse = httpclient.execute(httpGet); //GET response\r\n\t}\r\n\r\n\tif(method==\"post\"){\r\n\t\thttpPost = new HttpPost(endpoint_url);\r\n\t\thttpPost.addHeader(\"content-type\", \"application/json\"); //POST header\r\n\t\thttpPost.addHeader(\"Authorization\", \"Basic \"+auth); //POST header\r\n\r\n\t\tjson = '['+pool_name+']'\r\n\t\tentity = new StringEntity(json);\r\n\t\thttpPost.setEntity(entity);//POST Entity (params)\r\n\r\n\t\t//response = httpclient.execute(httpGet); //GET response\r\n\t\tresponse = httpclient.execute(httpPost); //POST response\r\n\t}\r\n\r\n\tresponseBody = EntityUtils.toString(response.getEntity());\r\n\tcode = response.getStatusLine().getStatusCode();\r\n\r\n\thttpclient.close();\r\n\r\n\tif(code==200){\r\n\t\tif(method==\"get\"){\r\n\t\t\tif(jsonOutput==true){\r\n\t\t\t\tif(post_reply==false){\r\n\t\t\t\t\tJSONArray response_ob = new JSONArray(responseBody);\r\n\t\t\t\t\treturn response_ob;//return response\r\n\t\t\t\t}else{\r\n\t\t\t\t\treponseBody_raw = \"[\"+responseBody+\"]\" //ADD [] to expression (otherwise JSONArray fails)\r\n\t\t\t\t\tJSONArray response_ob = new JSONArray(reponseBody_raw);\r\n\t\t\t\t\treturn response_ob;//return response\r\n\t\t\t\t}\r\n\t\t\t}else{\r\n\t\t\t\treturn responseBody;\r\n\t\t\t}\r\n\t\t}\r\n\r\n\t\tif(method==\"post\"){\r\n\t\t\tif(post_reply==false){\r\n\t\t\t\tJSONArray response_ob = new JSONArray(responseBody);\r\n\t\t\t\treturn response_ob;//return response\r\n\t\t\t}else{\r\n\t\t\t\treponseBody_raw = \"[\"+responseBody+\"]\" //ADD [] to expression (otherwise JSONArray fails)\r\n\t\t\t\tJSONArray response_ob = new JSONArray(reponseBody_raw);\r\n\t\t\t\treturn response_ob;//return response\r\n\t\t\t}\r\n\t\t}\r\n\t}else{\r\n\t\treturn(404);\r\n\t}\r\n}\r\n\r\n//according to :\r\n//https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery\r\n//active discovery WILDVALUE cannot contain  ['=',':','\\','#','space'] characters\r\n//the function below will get rid of those special characters if they exist\r\ndef SpecialCharacterCheck(value){\r\n\t//special characters not allowed in ActiveDiscovery\r\n\tdef specialCharacters = ~/\\=|\\:|\\\\|\\#|\\s/\r\n\r\n\t//replace the special character by nothing & return the 'new' service name\r\n\tvalue=value.replaceAll(specialCharacters, '')\r\n\t//println(service); //DEBUG\r\n\r\n\treturn value\r\n}"}}]]></adlist>
+        <schemaVersion>2</schemaVersion>
+        <dataSourceType>1</dataSourceType>
+        <attributes>
+        <attribute>
+            <name>scripttype</name>
+            <value>embed</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>scriptgroovy</name>
+            <value>import com.santaba.agent.groovyapi.expect.Expect;
+import com.santaba.agent.groovyapi.snmp.Snmp;
+import com.santaba.agent.groovyapi.http.*;
+import com.santaba.agent.groovyapi.jmx.*;
+import org.xbill.DNS.*;
+//ADDED MANUALLY
+import org.apache.http.client.methods.CloseableHttpResponse
+import org.apache.http.client.methods.HttpGet
+import org.apache.http.client.methods.HttpPost
+import org.apache.http.impl.client.CloseableHttpClient
+import org.apache.http.impl.client.HttpClients
+import org.apache.http.util.EntityUtils
+import javax.net.ssl.X509TrustManager
+import javax.net.ssl.TrustManager
+import java.security.cert.X509Certificate
+import java.security.cert.CertificateException
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import java.security.SecureRandom
+import org.apache.http.conn.ssl.NoopHostnameVerifier
+import org.apache.http.entity.StringEntity
+import org.json.JSONObject
+import org.json.JSONArray
+import groovy.json.JsonOutput
+
+// get the host, credentials, and mgmt station baseurl from the device property table
+hostname = hostProps.get(&#34;system.hostname&#34;);
+userid = hostProps.get(&#34;tegile.user&#34;);
+passwd = hostProps.get(&#34;tegile.pass&#34;);
+base_url = &#34;https://&#34; + hostname;
+//create auth Base64 encryption
+auth_raw = userid + &#34;:&#34; + passwd
+auth = auth_raw.bytes.encodeBase64().toString()
+
+poolArray=[]
+
+// construct the full endpoint url
+endpoint_url = base_url + &#34;/zebi/api/v2/listPools&#34;; //LIST POOLS
+method = &#34;get&#34;
+get_pools = APIrequest(endpoint_url,auth,method)
+
+if (get_pools != 404){
+	// iterate over the json_object 
+	for (int i=0; i&#60;get_pools.length();i++){
+		JSONObject obj = get_pools.get(i);
+
+		pool_name = obj.getString(&#34;name&#34;);
+
+		poolArray.add(pool_name) //store the pool in the poolArray (to further iterate over it)
+	}
+
+	//iterate over the newly built pool(s) array
+	poolArray.each{
+		pool_iterate=it
+
+		//query the projects for the Pool in question
+		endpoint_url = base_url + &#34;/zebi/api/v2/listProjects&#34;; //LIST POOLS
+		method = &#34;post&#34;
+		pool_name=&#39;&#34;&#39;+pool_iterate+&#39;&#34;, true&#39;
+		post_reply=false
+		get_projects_withinPool = APIrequest(endpoint_url,auth,method,pool_name,post_reply)
+	
+		for (int i=0; i&#60;get_projects_withinPool.length();i++){
+			JSONObject obj1 = get_projects_withinPool.get(i);
+
+			projectName = obj1[&#34;name&#34;]
+			projectName_wildvalue = SpecialCharacterCheck(projectName)
+
+			//get admin details for each project
+			endpoint_url = base_url + &#34;/zebi/api/v2/getProject&#34;; //LIST POOLS
+			method = &#34;post&#34;
+			pool_name=&#39;&#34;&#39;+pool_iterate+&#39;&#34;, &#34;&#39;+projectName+&#39;&#34;, true&#39;
+			post_reply=true
+			get_project_details = APIrequest(endpoint_url,auth,method,pool_name,post_reply)		
+			
+			for (int z=0; z&#60;get_project_details.length();z++){
+				JSONObject obj2 = get_project_details.get(z);
+				
+				defaultVolumeSizeInByte = obj2[&#34;defaultVolumeSizeInByte&#34;]
+				quotaEnabled_raw = obj2[&#34;quotaEnabled&#34;] 
+					if(quotaEnabled_raw == true){quotaEnabled=1}else{quotaEnabled=0}//check if it&#39;s true or false &#38; convert to 0/1
+				quotaInByte = obj2[&#34;quotaInByte&#34;]
+				copies = obj2[&#34;copies&#34;]
+				dedup_raw = obj2[&#34;dedup&#34;] 
+					if(dedup_raw == &#34;on&#34;){dedup=1}else{dedup=0}//on/off - convert to 0/1
+
+				println projectName_wildvalue+&#34;.defaultVolumeSizeInByte=&#34;+defaultVolumeSizeInByte
+				println projectName_wildvalue+&#34;.quotaEnabled=&#34;+quotaEnabled
+				println projectName_wildvalue+&#34;.quotaInByte=&#34;+quotaInByte
+				println projectName_wildvalue+&#34;.copies=&#34;+copies
+				println projectName_wildvalue+&#34;.dedup=&#34;+dedup
+			}
+
+			//get data analytics details for each project
+			endpoint_url = base_url + &#34;/zebi/api/v2/getOneMinuteDataAnalyticsHistory&#34;; //LIST POOLS
+			method = &#34;post&#34;
+			pool_name=&#39;[&#34;&#39;+pool_iterate+&#39;/&#39;+projectName+&#39;&#34;], null, null&#39;
+			post_reply=false
+			get_project__data_details = APIrequest(endpoint_url,auth,method,pool_name,post_reply)
+
+			for (int x=0; x&#60;get_project__data_details.length();x++){
+				JSONObject obj3 = get_project__data_details.get(x);
+				
+				Read_MBps = obj3[&#34;averages&#34;][&#34;Read_MBps&#34;]
+				Write_MBps = obj3[&#34;averages&#34;][&#34;Write_MBps&#34;]
+				Total_MBps = obj3[&#34;averages&#34;][&#34;Total_MBps&#34;]
+				Read_Ops = obj3[&#34;averages&#34;][&#34;Read_Ops&#34;]
+				Write_Ops = obj3[&#34;averages&#34;][&#34;Write_Ops&#34;]
+				Total_Ops = obj3[&#34;averages&#34;][&#34;Total_Ops&#34;]
+				Read_Latency = obj3[&#34;averages&#34;][&#34;Read_Latency&#34;]
+				Write_Latency = obj3[&#34;averages&#34;][&#34;Write_Latency&#34;]
+				Average_Latency = obj3[&#34;averages&#34;][&#34;Average_Latency&#34;]
+
+				println projectName_wildvalue+&#34;.Read_MBps=&#34;+Read_MBps
+				println projectName_wildvalue+&#34;.Write_MBps=&#34;+Write_MBps
+				println projectName_wildvalue+&#34;.Total_MBps=&#34;+Total_MBps
+				println projectName_wildvalue+&#34;.Read_Ops=&#34;+Read_Ops
+				println projectName_wildvalue+&#34;.Write_Ops=&#34;+Write_Ops
+				println projectName_wildvalue+&#34;.Total_Ops=&#34;+Total_Ops
+				println projectName_wildvalue+&#34;.Read_Latency=&#34;+Read_Latency
+				println projectName_wildvalue+&#34;.Write_Latency=&#34;+Write_Latency
+				println projectName_wildvalue+&#34;.Average_Latency=&#34;+Average_Latency
+			}
+
+			//get space info details for each project
+			endpoint_url = base_url + &#34;/zebi/api/v2/getDatasetSpaceInfo&#34;; //LIST POOLS
+			method = &#34;post&#34;
+			pool_name=&#39;&#34;&#39;+pool_iterate+&#39;/Local/&#39;+projectName+&#39;&#34;&#39;
+			post_reply=true
+			get_project__space_details = APIrequest(endpoint_url,auth,method,pool_name,post_reply)
+
+			for (int y=0; y&#60;get_project__space_details.length();y++){
+				JSONObject obj4 = get_project__space_details.get(y);
+
+				originalUsedByDataAndSnapshot = obj4[&#34;originalUsedByDataAndSnapshot&#34;]
+				usedByDataAndSnapshot = obj4[&#34;usedByDataAndSnapshot&#34;]
+				compressionSavingsPercentage = obj4[&#34;compressionSavingsPercentage&#34;]
+				available = obj4[&#34;available&#34;]
+				usedByData = obj4[&#34;usedByData&#34;]
+				usedBySnapshot = obj4[&#34;usedBySnapshot&#34;]
+				usedByReservation = obj4[&#34;usedByReservation&#34;]
+				quota = obj4[&#34;quota&#34;]
+				volSize = obj4[&#34;volSize&#34;]
+
+				println projectName_wildvalue+&#34;.originalUsedByDataAndSnapshot=&#34;+originalUsedByDataAndSnapshot
+				println projectName_wildvalue+&#34;.usedByDataAndSnapshot=&#34;+usedByDataAndSnapshot
+				println projectName_wildvalue+&#34;.compressionSavingsPercentage=&#34;+compressionSavingsPercentage
+				println projectName_wildvalue+&#34;.available=&#34;+available
+				println projectName_wildvalue+&#34;.usedByData=&#34;+usedByData
+				println projectName_wildvalue+&#34;.usedBySnapshot=&#34;+usedBySnapshot
+				println projectName_wildvalue+&#34;.usedByReservation=&#34;+usedByReservation
+				println projectName_wildvalue+&#34;.quota=&#34;+quota
+				println projectName_wildvalue+&#34;.volSize=&#34;+volSize
+			}
+		}
+	}
+	return(0);
+}
+
+//function to perform API request
+def APIrequest(endpoint_url,auth,method, pool_name=&#34;&#34;, post_reply=false, jsonOutput=true){
+	// HTTP Get
+	def trustAllCerts = [
+		new X509TrustManager() {
+			public X509Certificate[] getAcceptedIssuers() {
+				return null
+			}
+
+			public void checkServerTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+			}
+
+			public void checkClientTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+			}
+		}
+	] as TrustManager[] 
+
+
+	SSLContext sc = SSLContext.getInstance(&#34;SSL&#34;);
+	sc.init(null, trustAllCerts, new SecureRandom());
+	CloseableHttpClient httpclient = HttpClients.custom().setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE).setSslcontext(sc).build();
+
+	if(method==&#34;get&#34;){
+		httpGet = new HttpGet(endpoint_url); //SIMPLE GET - Without Params
+		httpGet.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //GET header
+		httpGet.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //GET header
+		response = httpclient.execute(httpGet); //GET response
+	}
+
+	if(method==&#34;post&#34;){
+		httpPost = new HttpPost(endpoint_url);
+		httpPost.addHeader(&#34;content-type&#34;, &#34;application/json&#34;); //POST header
+		httpPost.addHeader(&#34;Authorization&#34;, &#34;Basic &#34;+auth); //POST header
+
+		json = &#39;[&#39;+pool_name+&#39;]&#39;
+		entity = new StringEntity(json);
+		httpPost.setEntity(entity);//POST Entity (params)
+
+		//response = httpclient.execute(httpGet); //GET response
+		response = httpclient.execute(httpPost); //POST response
+	}
+
+	responseBody = EntityUtils.toString(response.getEntity());
+	code = response.getStatusLine().getStatusCode();
+
+	httpclient.close();
+
+	if(code==200){
+		if(method==&#34;get&#34;){
+			if(jsonOutput==true){
+				if(post_reply==false){
+					JSONArray response_ob = new JSONArray(responseBody);
+					return response_ob;//return response
+				}else{
+					reponseBody_raw = &#34;[&#34;+responseBody+&#34;]&#34; //ADD [] to expression (otherwise JSONArray fails)
+					JSONArray response_ob = new JSONArray(reponseBody_raw);
+					return response_ob;//return response
+				}
+			}else{
+				return responseBody;
+			}
+		}
+
+		if(method==&#34;post&#34;){
+			if(post_reply==false){
+				JSONArray response_ob = new JSONArray(responseBody);
+				return response_ob;//return response
+			}else{
+				reponseBody_raw = &#34;[&#34;+responseBody+&#34;]&#34; //ADD [] to expression (otherwise JSONArray fails)
+				JSONArray response_ob = new JSONArray(reponseBody_raw);
+				return response_ob;//return response
+			}
+		}
+	}else{
+		println responseBody
+		return(404);
+	}
+}
+
+//according to :
+//https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery
+//active discovery WILDVALUE cannot contain  [&#39;=&#39;,&#39;:&#39;,&#39;\&#39;,&#39;#&#39;,&#39;space&#39;] characters
+//the function below will get rid of those special characters if they exist
+def SpecialCharacterCheck(value){
+	//special characters not allowed in ActiveDiscovery
+	def specialCharacters = ~/\=|\:|\\|\#|\s/
+
+	//replace the special character by nothing &#38; return the &#39;new&#39; service name
+	value=value.replaceAll(specialCharacters, &#39;&#39;)
+	//println(service); //DEBUG
+
+	return value
+}</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowsscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowscmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxcmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        </attributes>
+        <datapoints>
+        <datapoint>
+            <name>copies</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.copies</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Specifies number of the project copies.
+
+Supported values:
+- 1 (default)
+- 2
+- 3</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>dedup</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.dedup</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Turns on or off deduplication on the project.
+
+Supported values:
+- on (default)
+- off</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>defaultVolumeSizeInByte</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.defaultVolumeSizeInByte</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Default volume size (bytes).
+
+The value should be greater than or equal to 1 MB (1048576
+bytes). The default value is 1 GB.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>quotaEnabled</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.quotaEnabled</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Checks whether quota is enabled on the project (true or false).</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>quotaInByte</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.quotaInByte</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Enables quota on the project if intended for NFS use.
+
+The value should be greater than or equal to 1 MB (1048576
+bytes).
+
+When this value == 0, no quota is assigned to the project.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Average_Latency</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.Average_Latency</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Average latency, in millisecond, for read/write operations.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Read_Latency</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.Read_Latency</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Read operation latency, in milliseconds.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Read_MBps</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.Read_MBps</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Read throughput data, in megabytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Read_Ops</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.Read_Ops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Number of read operations/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Total_MBps</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.Total_MBps</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Total Read/Write throughput data, in megabytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Total_Ops</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.Total_Ops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Total number of read/write operations/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Write_Latency</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.Write_Latency</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Write operation latency, in milliseconds.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Write_MBps</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.Write_MBps</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Write throughput data, in megabytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Write_Ops</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.Write_Ops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Number of write operations/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>available</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.available</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>For datasets with a quota, this represents the
+amount of space remaining in the quota.
+
+For shares and luns without a quota, this
+represents the amount of space remaining in the
+project&#39;s quota (if it exists).
+
+If a quota does not exist on a project, this value
+represents the amount of space (in bytes)
+remaining on the pool.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>originalUsedByDataAndSnapshot</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.originalUsedByDataAndSnapshot</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Original used by dataset data and snapshot before
+compression (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>usedByData</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.usedByData</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount used by this dataset&#39;s data after
+compression (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>usedByDataAndSnapshot</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.usedByDataAndSnapshot</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount used by the dataset data and snapshot
+after compression (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>usedByReservation</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.usedByReservation</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Share and project field. Amount used by
+reservation (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>usedBySnapshot</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.usedBySnapshot</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount used by this dataset&#39;s snapshots after
+compression (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>volSize</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.volSize</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Volume only field. The size of the volume (bytes).</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Read_Bytes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>Read_MBps * 1024 * 1024</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Read throughput data, in bytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Total_Bytes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>Total_MBps * 1024 * 1024</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Total Read/Write throughput data, in bytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Write_Bytes</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>Write_MBps * 1024 * 1024</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Write throughput data, in bytes/sec.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>storageUtilization</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>(usedByData/ (available + usedByData)) * 100</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr>&#62;= 85 85 95</alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody>Project ##INSTANCE## on Tegile Array ##HOST## has reported that ##VALUE## % of total storage capacity is now utilized, placing the project into ##LEVEL## state.
+
+This started at ##START##, -- or ##DURATION## ago.</alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Percent of available project storage utilized.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>5</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>compressionSavingsPercentage</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.compressionSavingsPercentage</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Amount saved from compression as a percentage.</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        </datapoints>
+        <graphs>
+        <graph>
+            <name>IOPS</name>
+            <title>IOPS</title>
+            <verticallabel>IOPS</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>6</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>Read_Ops</name>
+            <datapointname>Read_Ops</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>Write_Ops</name>
+            <datapointname>Write_Ops</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>Read</legend>
+                <color>blue</color>
+                <datapointname>Read_Ops</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Write</legend>
+                <color>green</color>
+                <datapointname>Write_Ops</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>Latency</name>
+            <title>Latency</title>
+            <verticallabel>milliseconds</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>8</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>Average_Latency</name>
+            <datapointname>Average_Latency</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>Read_Latency</name>
+            <datapointname>Read_Latency</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>Write_Latency</name>
+            <datapointname>Write_Latency</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>Read</legend>
+                <color>aqua</color>
+                <datapointname>Read_Latency</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Write</legend>
+                <color>olive</color>
+                <datapointname>Write_Latency</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Avg. R/W</legend>
+                <color>orange2</color>
+                <datapointname>Average_Latency</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>Quota Storage</name>
+            <title>Quota Storage</title>
+            <verticallabel>bytes</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>4</displayprio>
+            <timescale>1day</timescale>
+            <base1024>true</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>quotaInByte</name>
+            <datapointname>quotaInByte</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>2</type>
+                <legend>Quota</legend>
+                <color>green</color>
+                <datapointname>quotaInByte</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>Savings</name>
+            <title>Savings</title>
+            <verticallabel>%</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>100.0</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>5</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>compressionSavingsPercentage</name>
+            <datapointname>compressionSavingsPercentage</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>2</type>
+                <legend>Savings</legend>
+                <color>yellow</color>
+                <datapointname>compressionSavingsPercentage</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>Snapshot Space</name>
+            <title>Snapshot Space</title>
+            <verticallabel>bytes</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>2</displayprio>
+            <timescale>1day</timescale>
+            <base1024>true</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>usedBySnapshot</name>
+            <datapointname>usedBySnapshot</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>2</type>
+                <legend>Snapshot</legend>
+                <color>gray</color>
+                <datapointname>usedBySnapshot</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>Storage</name>
+            <title>Storage</title>
+            <verticallabel>bytes</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>3</displayprio>
+            <timescale>1day</timescale>
+            <base1024>true</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>available</name>
+            <datapointname>available</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>usedByData</name>
+            <datapointname>usedByData</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+        <graphvirtualdatapoint>
+            <name>totalSize</name>
+            <rpn>usedByData + available</rpn>
+        </graphvirtualdatapoint>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>Free</legend>
+                <color>olive</color>
+                <datapointname>available</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Data</legend>
+                <color>orange2</color>
+                <datapointname>usedByData</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Total</legend>
+                <color>black</color>
+                <datapointname>totalSize</datapointname>
+                <isvirtualdatapoint>true</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>Storage Utilization</name>
+            <title>Storage Utilization</title>
+            <verticallabel>%</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>100.0</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>1</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>storageUtilization</name>
+            <datapointname>storageUtilization</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>2</type>
+                <legend>Utilization</legend>
+                <color>fuchsia</color>
+                <datapointname>storageUtilization</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>Throughput</name>
+            <title>Throughput</title>
+            <verticallabel>bytes/sec</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>7</displayprio>
+            <timescale>1day</timescale>
+            <base1024>true</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>Read_Bytes</name>
+            <datapointname>Read_Bytes</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>Write_Bytes</name>
+            <datapointname>Write_Bytes</datapointname>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>Read</legend>
+                <color>blue</color>
+                <datapointname>Read_Bytes</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>Write</legend>
+                <color>green</color>
+                <datapointname>Write_Bytes</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        </graphs>
+        <overviewgraphs>
+        <overviewgraph>
+            <name>Top Projects by Avg. R/W Latency</name>
+            <title>Top Projects by Avg. R/W Latency</title>
+            <verticallabel>milliseconds</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>4</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>Average_Latency</name>
+            <datapointname>Average_Latency</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE##</legend>
+                <datapointname>Average_Latency</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
+        <overviewgraph>
+            <name>Top Projects by IOPS</name>
+            <title>Top Projects by IOPS</title>
+            <verticallabel>IOPS</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>2</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>Total_Ops</name>
+            <datapointname>Total_Ops</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE##</legend>
+                <datapointname>Total_Ops</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
+        <overviewgraph>
+            <name>Top Projects by Storage Utilization</name>
+            <title>Top Projects by Storage Utilization</title>
+            <verticallabel>%</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>100.0</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>1</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>storageUtilization</name>
+            <datapointname>storageUtilization</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE##</legend>
+                <datapointname>storageUtilization</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
+        <overviewgraph>
+            <name>Top Projects by Throughput</name>
+            <title>Top Projects by Throughput</title>
+            <verticallabel>bytes/sec</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>3</displayprio>
+            <timescale>1day</timescale>
+            <base1024>true</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>Total_Bytes</name>
+            <datapointname>Total_Bytes</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE##</legend>
+                <datapointname>Total_Bytes</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
+        </overviewgraphs>
+        <scripts>
+        </scripts>
+    </entry>
+</feed>
