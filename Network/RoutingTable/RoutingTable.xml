@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<feed  version="1.0" hasPendingRequests="false" >
+  <company></company>
+  <status>200</status>
+  <errmsg>OK</errmsg>
+  <interval>0</interval>
+    <entry type="predatasource">
+        <version>1601563169</version>
+        <name>RoutingTable</name>
+        <displayedas>Routing Table</displayedas>
+        <description>Retrieve routing table for the device(s) in question</description>
+        <collector>script</collector>
+        <hasMultiInstances>false</hasMultiInstances>
+        <schedule>3600</schedule>
+        <appliesTo>hasCategory(&#34;RoutingTableMonitoring&#34;) &#38;&#38; (ssh.user &#38;&#38; ssh.pass)</appliesTo>
+        <wildcardauto>false</wildcardauto>
+        <wildcardpersist>false</wildcardpersist>
+        <wildcardlinuxscript></wildcardlinuxscript>
+        <wildcardlinuxcmdline></wildcardlinuxcmdline>
+        <wildcardwinscript></wildcardwinscript>
+        <wildcardwincmdline></wildcardwincmdline>
+        <wildcardgroovyscript></wildcardgroovyscript>
+        <wildcardschedule>1440</wildcardschedule>
+        <wildcarddisable>false</wildcarddisable>
+        <wildcarddeleteinactive>false</wildcarddeleteinactive>
+        <agdmethod>none</agdmethod>
+        <agdparams></agdparams>
+        <group>Network Troubleshoot</group>
+        <tags></tags>
+        <technology>Created by AS - Vitor Santos
+
+We need to have SSH access to the device(s)
+
+The user needs to have enable access (#), if it doesn&#39;t login directly into enable mode please define the property &#39;ssh.enable.pass&#39; in order for it to elevate it.
+
+Compatibility:
+- Cisco IOS devices
+- Cisco NX-OS
+- Cisco ASA
+- Palo Alto Firewall(s)</technology>
+        <adlist><![CDATA[{"agdmethod":"none","agdparams":"","id":0,"filters":[],"params":{}}]]></adlist>
+        <schemaVersion>2</schemaVersion>
+        <dataSourceType>2</dataSourceType>
+        <attributes>
+        <attribute>
+            <name>scripttype</name>
+            <value>embed</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>scriptgroovy</name>
+            <value>import com.santaba.agent.groovyapi.expect.Expect;
+import com.santaba.agent.groovyapi.snmp.Snmp;
+import com.santaba.agent.groovyapi.http.*;
+import com.santaba.agent.groovyapi.jmx.*;
+import org.xbill.DNS.*;
+//added manually
+import java.text.SimpleDateFormat;
+import java.io.*;
+
+//retrieve required properties
+hostname = hostProps.get(&#34;system.displayname&#34;); //Device Hostname
+host = hostProps.get(&#34;system.hostname&#34;); //Device IP
+user = hostProps.get(&#34;ssh.user&#34;); //SSH user
+pass = hostProps.get(&#34;ssh.pass&#34;); //SSH password
+enable = hostProps.get(&#34;ssh.enable.pass&#34;); //SSH password
+systeminfo = hostProps.get(&#34;system.sysinfo&#34;); //get the OS running on the box
+foundDevice = false; //declaring variable
+
+//login into  device (SSH) and wait for the prompt
+cli = Expect.open(host, user, pass);
+
+//check device type (to decide which commands will input
+if (systeminfo.contains(&#34;Cisco Adaptive Security&#34;)){ //if it&#39;s an ASA
+	if (enable != null){
+		//make sure we&#39;re connected (in case the expected prompt = true)
+		cli.expect(&#34;&#62;&#34;); //expected prompt (using RegEx due to the special characters)
+		// enter enable mode
+		cli.send(&#34;enable\n&#34;);
+		cli.expect(&#34;:&#34;);
+		cli.send(pass + &#34;\n&#34;)
+		cli.expect(/\#/); //expected prompt (using RegEx due to the special characters)
+	}else{
+		//make sure we&#39;re connected (in case the expected prompt = true)
+		cli.expect(/\#/); //expected prompt (using RegEx due to the special characters)
+	}
+
+	//ensure the page-by-page view isn&#39;t active (same as &#39;terminal length 0&#39;)
+	cli.send(&#34;terminal pager 0\n&#34;);
+	cli.expect(/\#/); //expected prompt (using RegEx due to the special characters)
+	//trigger the config backup
+	cli.send(&#34;sh route\n&#34;);
+	cli.expect(/\#/); //expected prompt (using RegEx due to the special characters)
+	//retrieve file content
+	output = cli.before();
+	//logout from the device
+	cli.send(&#34;exit\n&#34;);
+	//close the ssh connection handle then print the config
+	cli.expectClose();
+	//end connection to the device
+
+	deviceRecon=true
+	foundDevice=true //this will lock the deviceRecon == True
+}else{deviceRecon=false}
+
+if (foundDevice==false){//only do this if the device type wasn&#39;t matched previously
+	if (systeminfo.contains(&#34;Cisco IOS&#34;) || systeminfo.contains(&#34;Cisco NX-OS&#34;) || systeminfo.contains(&#34;Cisco Internetwork Operating System&#34;)){//if it&#39;s a regular IOS/NX-OS
+		if (enable != null){
+			//make sure we&#39;re connected (in case the expected prompt = true)
+			cli.expect(&#34;&#62;&#34;); //expected prompt (using RegEx due to the special characters)
+			// enter enable mode
+			cli.send(&#34;enable\n&#34;);
+			cli.expect(&#34;:&#34;);
+			cli.send(pass + &#34;\n&#34;)
+			cli.expect(/\#/); //expected prompt (using RegEx due to the special characters)
+		}else{
+			//make sure we&#39;re connected (in case the expected prompt = true)
+			cli.expect(/\#/); //expected prompt (using RegEx due to the special characters)
+		}		
+
+		//ensure the page-by-page view isn&#39;t active (same as &#39;terminal length 0&#39;)
+		cli.send(&#34;terminal length 0\n&#34;);
+		cli.expect(/\#/); //expected prompt (using RegEx due to the special characters)
+		//trigger the config backup
+		cli.send(&#34;sh ip route\n&#34;);
+		cli.expect(/\#/); //expected prompt (using RegEx due to the special characters)
+		//retrieve file content
+		output = cli.before();
+		//logout from the device
+		cli.send(&#34;exit\n&#34;);
+		//close the ssh connection handle then print the config
+		cli.expectClose();
+		//end connection to the device
+
+		deviceRecon=true
+		foundDevice=true
+	}else{deviceRecon=false}
+}
+
+if (foundDevice==false){//only do this if the device type wasn&#39;t matched previously
+	if (systeminfo.contains(&#34;Palo Alto&#34;)){ //if it&#39;s a regular IOS/NX-OS
+		def prompt = &#39;[&#62;#$]&#39;
+
+		//make sure we&#39;re connected (in case the expected prompt = true)
+		cli.expect(prompt); //expected prompt (using RegEx due to the special characters)
+		cli.send(&#34;\n&#34;)
+		cli.expect(prompt)
+
+		prompt = &#34;\\Q${cli.before().readLines().last().trim()}\\E${prompt}&#34;
+
+		//set terminal paging off
+		cli.send(&#39;set cli pager off\n&#39;)
+		cli.expect(&#34;${prompt} set cli pager off&#34;)
+
+		cli.send(&#34;show routing route\n&#34;)
+		cli.expect(&#34;${prompt} show routing route&#34;)
+		cli.expect(prompt)
+
+		//retrieve file content
+		output = cli.before();
+
+		//set the terminal paging on
+		cli.send(&#39;set cli pager on\n&#39;)
+		cli.expect(&#34;${prompt} set cli pager on&#34;)
+
+		//close the ssh connection handle then print the config
+		cli.expectClose();
+		//end connection to the device
+		deviceRecon=true
+		foundDevice=true
+	}else{deviceRecon=false}
+}
+
+//only handle the output if the device was recognized
+if (deviceRecon==true){
+	//check which delimeter line needs to be used
+	if (systeminfo.contains(&#34;Cisco NX-OS&#34;)){ //NX-OS needs to use a different delimeter line
+		delimeter_line=&#34;0.0.0.0/0&#34;
+	}else{
+		delimeter_line=&#34;Gateway of last&#34;
+	}
+
+	if (systeminfo.contains(&#34;Palo Alto&#34;)){ //Palo Alto needs to use a different delimeter line
+		delimeter_line=&#34;====&#34;
+	}else{
+		delimeter_line=&#34;Gateway of last&#34;
+	}
+
+	printfromhere=false //set this var to false (controls from where it starts the output (of the prev. command)
+
+	output.eachLine
+	{ line -&#62;
+		if (line.contains(delimeter_line)){
+			printfromhere=true //set to true (means we reached the point to start the output
+		}
+
+		if (printfromhere==true){
+			/*filtering unwanted line(s)
+			- Gateway itself
+			- Empty lines
+			- Prompt line (containing the actual device hostname (unwanted)*/
+			if (line.contains(&#34;Gateway of last&#34;) || line.contains(/^\s*$/) || line.contains(hostname)){
+				//DoNothing
+			}else{
+				//removing the route time (within the routing table) since that timer is constantly changing (what triggers differences)
+				// &#39;, &#39; using the string previously in order to split the line in 2 part (then choosing the first one)
+				lineOutput= line.minus(line + &#34;,&#34;).split(&#34;, &#34;)[0]
+
+				println lineOutput //output the line
+			}
+		}
+	}
+}else{
+	println &#34;Device OS didnt supported by this script yet!&#34;
+}</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowsscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowscmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxcmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>csfileformat</name>
+            <value>arbitrary</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>cstimestampformat</name>
+            <value>yyyy-MM-dd hh:mm:ss z</value>
+            <comment></comment>
+        </attribute>
+        </attributes>
+        <datapoints>
+        <datapoint>
+            <name>RetrievalStatus</name>
+            <dataType>1</dataType>
+            <type>2</type>
+            <postprocessormethod>none</postprocessormethod>
+            <postprocessorparam>{&#34;fetch_check&#34;:{},&#34;format&#34;:&#34;arbitrary&#34;}</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr>= 1</alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Check the collector is being able to poll the routing configuration</description>
+            <maxvalue>1</maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1>fetch</userparam1>
+            <userparam2>false</userparam2>
+            <userparam3>0</userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        </datapoints>
+        <graphs>
+        </graphs>
+        <overviewgraphs>
+        </overviewgraphs>
+        <scripts>
+        </scripts>
+    </entry>
+</feed>
