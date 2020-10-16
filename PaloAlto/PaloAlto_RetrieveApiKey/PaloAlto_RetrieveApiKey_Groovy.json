@@ -1,0 +1,46 @@
+{
+    "scheduleOption": 0,
+    "dataType": 0,
+    "description": "Retrieve apikey automatically by querying the devices in question & populating the 'paloalto.apikey.pass' property automatically with the respective key (under customProperties)\n\nImprovements:\n- It now uses the REST API in order to add the apikey into the device(s) customProperties (in order to don't add the prefix 'auto.' to the property)",
+    "appliesTo": "hasCategory(\"PaloAlto\")",
+    "technology": "",
+    "type": "propertyrule",
+    "params": [
+        {
+            "name": "linuxcmdline",
+            "comment": "",
+            "value": ""
+        },
+        {
+            "name": "linuxscript",
+            "comment": "",
+            "value": ""
+        },
+        {
+            "name": "scriptgroovy",
+            "comment": "",
+            "value": "import groovy.json.JsonOutput\r\nimport groovy.json.JsonSlurper\r\nimport org.apache.commons.codec.binary.Hex\r\nimport org.apache.http.client.methods.*\r\nimport org.apache.http.entity.ContentType\r\nimport org.apache.http.entity.StringEntity\r\nimport org.apache.http.impl.client.CloseableHttpClient\r\nimport org.apache.http.impl.client.HttpClients\r\nimport org.apache.http.util.EntityUtils\r\nimport javax.crypto.Mac\r\nimport javax.crypto.spec.SecretKeySpec\r\nimport java.net.URLEncoder\r\n\r\nip = hostProps.get(\"system.hostname\")\r\nuserid = hostProps.get(\"ssh.user\")\r\npassword = hostProps.get(\"ssh.pass\")\r\n\r\naccessId = hostProps.get(\"api.user\")\r\naccessKey = hostProps.get(\"api.pass\")\r\ncompany = hostProps.get(\"api.account\")\r\n\r\nif (!accessId || !accessKey || !company){\r\n  println(\"LM API credentials missing.\")\r\n  println(\"ID: ${accessId}\\nKey: ${accessKey?.replaceAll(/./,\"*\")}\\nCompany: ${company}\")\r\n  return 1\r\n}\r\n\r\ndevId = hostProps.get(\"system.deviceId\")\r\nexistingkey = hostProps.get(\"paloalto.apikey.pass\")\r\n// println(\"Existing key: ${existingkey}\")\r\nencodedPassword = URLEncoder.encode(password, \"UTF-8\")\r\n\r\n// get key from api\r\npageXML = new URL(\"https://${ip}/api/?type=keygen&user=${userid}&password=${encodedPassword}\").getText().trim().replaceAll(/\\n/,\"\").replaceAll(\" \",\"\")\r\n// pageXML = \"\"\"\r\n// <response status=\"success\">\r\n//   <result>\r\n//     <key>\r\n//       KEY_HERE\r\n//     <\/key>\r\n//   <\/result>\r\n// <\/response>\r\n// \"\"\".trim().replaceAll(/\\n/,\"\").replaceAll(\" \",\"\")\r\nkey = (pageXML =~ /<key>(.*)<\\/key>/)[0][1]\r\n// println(\"New key: ${key}\")\r\n\r\nif (existingkey != key){ //new key is different than existing key\r\n  if (existingkey) { //property already exists, put it\r\n    println(\"Property exists. Updating it...\")\r\n    data = JsonOutput.toJson([\"value\":key])\r\n    response = LMAPI(\"PUT\",accessId,accessKey,company,\"/device/devices/${devId}/properties/paloalto.apikey.pass/\",\"\",data)\r\n  } else { //property does not exist, post it\r\n    println(\"Property does not exist. Creating it...\")\r\n    data = JsonOutput.toJson([\"name\":\"paloalto.apikey.pass\",\"value\":key])\r\n    response = LMAPI(\"POST\",accessId,accessKey,company,\"/device/devices/${devId}/properties/\",\"\",data)\r\n  }\r\n  println(\"Response code- ${response?.code}\\nResponse body- ${response?.body}\")\r\n} else {println(\"New key matches existing key. Nothing to do.\")}\r\n\r\nreturn 0\r\n\r\ndef LMAPI(String _verb, _accessId, _accessKey, _account, GString _resourcePath, String _queryParameters, String _data){\r\n  responseDict = [:]\r\n  url = 'https://' + _account + '.logicmonitor.com' + '/santaba/rest' + _resourcePath + _queryParameters\r\n  StringEntity params = new StringEntity(_data, ContentType.APPLICATION_JSON)\r\n  epoch = System.currentTimeMillis()\r\n  requestVars = _verb + epoch + _data + _resourcePath\r\n  hmac = Mac.getInstance('HmacSHA256')\r\n  secret = new SecretKeySpec(_accessKey.getBytes(), 'HmacSHA256')\r\n  hmac.init(secret)\r\n  hmac_signed = Hex.encodeHexString(hmac.doFinal(requestVars.getBytes()))\r\n  signature = hmac_signed.bytes.encodeBase64()\r\n  CloseableHttpClient httpclient = HttpClients.createDefault()\r\n  if (_verb == 'PUT'){\r\n      http_request = new HttpPut(url)\r\n  } else if (_verb == 'POST'){\r\n      http_request = new HttpPost(url)\r\n  } else{println('INVALID HTTP VERB')}\r\n  http_request.addHeader(\"Authorization\", \"LMv1 \" + _accessId + \":\" + signature + \":\" + epoch)\r\n  http_request.setHeader(\"X-Version\", \"2\")\r\n  http_request.setHeader(\"Accept\", \"application/json\")\r\n  http_request.setHeader(\"Content-type\", \"application/json\")\r\n  http_request.setEntity(params)\r\n  response = httpclient.execute(http_request)\r\n  responseBody = EntityUtils.toString(response.getEntity())\r\n  code = response.getStatusLine().getStatusCode()\r\n  responseDict['code'] = code ?: null\r\n  responseDict['body'] = responseBody ?: null\r\n  return responseDict\r\n}"
+        },
+        {
+            "name": "scripttype",
+            "comment": "embed",
+            "value": "embed"
+        },
+        {
+            "name": "windowscmdline",
+            "comment": "",
+            "value": ""
+        },
+        {
+            "name": "windowsscript",
+            "comment": "",
+            "value": ""
+        }
+    ],
+    "version": 1602854307,
+    "tags": "",
+    "auditVersion": 0,
+    "name": "PaloAlto_RetrieveApiKey_Groovy",
+    "id": 119,
+    "group": "Palo Alto"
+}

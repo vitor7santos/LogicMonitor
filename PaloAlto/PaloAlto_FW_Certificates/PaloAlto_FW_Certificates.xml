@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<feed  version="1.0" hasPendingRequests="false" >
+  <company></company>
+  <status>200</status>
+  <errmsg>OK</errmsg>
+  <interval>0</interval>
+    <entry type="predatasource">
+        <version>1602850246</version>
+        <name>PaloAlto_FW_Certificates</name>
+        <displayedas>Certificates</displayedas>
+        <description>Monitor certificate(s) lifetime (expiration, etc...)</description>
+        <collector>script</collector>
+        <hasMultiInstances>true</hasMultiInstances>
+        <schedule>3600</schedule>
+        <appliesTo>hasCategory(&#34;PaloAlto&#34;)</appliesTo>
+        <wildcardauto>true</wildcardauto>
+        <wildcardpersist>false</wildcardpersist>
+        <wildcardlinuxscript>ad_script</wildcardlinuxscript>
+        <wildcardlinuxcmdline>type=&#34;embeded&#34; </wildcardlinuxcmdline>
+        <wildcardwinscript>ad_script</wildcardwinscript>
+        <wildcardwincmdline>type=&#34;embeded&#34; </wildcardwincmdline>
+        <wildcardgroovyscript>import com.santaba.agent.groovyapi.http.*;
+
+def key = hostProps.get(&#39;paloalto.apikey.pass&#39;);
+def host = hostProps.get(&#39;system.hostname&#39;);
+
+def commands = URLEncoder.encode(&#39;&#60;request&#62;&#60;certificate&#62;&#60;show&#62;&#60;/show&#62;&#60;/certificate&#62;&#60;/request&#62;&#39;);
+def response = (&#39;https://&#39; + host + &#39;/api/?type=op&#38;key=&#39; + key + &#39;&#38;cmd=&#39; + commands).toURL().text;
+
+def xmlParse = new XmlSlurper().parseText(response);
+
+// loop through slots
+xmlParse.result.each
+{ certificate -&#62;
+
+	// loop through each slot&#39;s components
+	certificate.entry.each
+	{ entry -&#62;
+		instance_name = entry.&#34;common-name&#34;.toString();
+		instance_desc = entry.@name
+		//properties
+		certificate_issuer = entry.issuer.toString();
+		certificate_subject = entry.subject.toString();
+
+		// Wildvalues cannot contain spaces, :, =, \, or #
+		// Because of groovy and regex complexities and \ being a special character,
+		//  we must use FOUR backslashes. Two (or one or three) won&#39;t work. Honest.
+		println instance_name.replaceAll(&#39;[ :=#\\\\]&#39;,&#39;_&#39;) + &#39;##&#39; +  instance_name + &#39;##&#39; + instance_desc + &#39;####auto.certificate_issuer=&#39; + certificate_issuer.replaceAll(&#39;[ :=#\\\\]&#39;,&#39;\&#39;&#39;) + &#39;&#38;auto.certificate_subject=&#39; + certificate_subject.replaceAll(&#39;[ :=#\\\\]&#39;,&#39;\&#39;&#39;) + &#39;&#38;auto.certificate_expirydate=&#39; + entry.&#34;not-valid-after&#34;;
+	}
+}
+
+return 0;</wildcardgroovyscript>
+        <wildcardschedule>60</wildcardschedule>
+        <wildcarddisable>false</wildcarddisable>
+        <wildcarddeleteinactive>true</wildcarddeleteinactive>
+        <agdmethod>none</agdmethod>
+        <agdparams></agdparams>
+        <group></group>
+        <tags></tags>
+        <technology>##DataSource created by AS staff (Vitor Santos - 05/11/2020)</technology>
+        <adlist><![CDATA[{"agdmethod":"none","method":"ad_script","agdparams":"","id":0,"filters":[],"params":{"type":"embeded","groovyscript":"import com.santaba.agent.groovyapi.http.*;\r\n\r\ndef key = hostProps.get('paloalto.apikey.pass');\r\ndef host = hostProps.get('system.hostname');\r\n\r\ndef commands = URLEncoder.encode('<request><certificate><show><\/show><\/certificate><\/request>');\r\ndef response = ('https://' + host + '/api/?type=op&key=' + key + '&cmd=' + commands).toURL().text;\r\n\r\ndef xmlParse = new XmlSlurper().parseText(response);\r\n\r\n// loop through slots\r\nxmlParse.result.each\r\n{ certificate ->\r\n\r\n\t// loop through each slot's components\r\n\tcertificate.entry.each\r\n\t{ entry ->\r\n\t\tinstance_name = entry.\"common-name\".toString();\r\n\t\tinstance_desc = entry.@name\r\n\t\t//properties\r\n\t\tcertificate_issuer = entry.issuer.toString();\r\n\t\tcertificate_subject = entry.subject.toString();\r\n\r\n\t\t// Wildvalues cannot contain spaces, :, =, \\, or #\r\n\t\t// Because of groovy and regex complexities and \\ being a special character,\r\n\t\t//  we must use FOUR backslashes. Two (or one or three) won't work. Honest.\r\n\t\tprintln instance_name.replaceAll('[ :=#\\\\\\\\]','_') + '##' +  instance_name + '##' + instance_desc + '####auto.certificate_issuer=' + certificate_issuer.replaceAll('[ :=#\\\\\\\\]','\\'') + '&auto.certificate_subject=' + certificate_subject.replaceAll('[ :=#\\\\\\\\]','\\'') + '&auto.certificate_expirydate=' + entry.\"not-valid-after\";\r\n\t}\r\n}\r\n\r\nreturn 0;"}}]]></adlist>
+        <schemaVersion>2</schemaVersion>
+        <dataSourceType>1</dataSourceType>
+        <attributes>
+        <attribute>
+            <name>scripttype</name>
+            <value>embed</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>scriptgroovy</name>
+            <value>import com.santaba.agent.groovyapi.http.*;
+import java.time.*;
+
+def key = hostProps.get(&#39;paloalto.apikey.pass&#39;);
+def host = hostProps.get(&#39;system.hostname&#39;);
+
+def commands = URLEncoder.encode(&#39;&#60;request&#62;&#60;certificate&#62;&#60;show&#62;&#60;/show&#62;&#60;/certificate&#62;&#60;/request&#62;&#39;);
+def response = (&#39;https://&#39; + host + &#39;/api/?type=op&#38;key=&#39; + key + &#39;&#38;cmd=&#39; + commands).toURL().text;
+
+def xmlParse = new XmlSlurper().parseText(response);
+
+now = new Date();
+
+// loop through slots
+xmlParse.result.each
+{ certificate -&#62;
+	// loop through each slot&#39;s components
+	certificate.entry.each
+	{ entry -&#62;
+		instance_name = entry.&#34;common-name&#34;.toString();
+		wildvalue = instance_name.replaceAll(&#39;[ :=#\\\\]&#39;,&#39;_&#39;)
+		expiry = entry.&#34;not-valid-after&#34;.toString()
+
+		//parse the date format
+        time=Date.parse(&#34;MMM d HH:mm:ss yyyy&#34;, expiry)
+        // get epoch milis
+        epoch_milis = time.getTime()
+        // create EST local time
+        local_dt = LocalDateTime.ofInstant(Instant.ofEpochMilli(epoch_milis), ZoneId.of(&#39;America/New_York&#39;));
+        // created zoned time out of EST time
+        zoned_dt = local_dt.atZone(ZoneId.of(&#39;America/New_York&#39;))
+        // get offset in milis
+        offset_ms = zoned_dt.getOffset().getTotalSeconds() * 1000
+        // add to EST epoc
+        local_timestamp = epoch_milis + offset_ms
+
+        expiry_date = new Date(local_timestamp)
+        use(groovy.time.TimeCategory) {
+            duration = expiry_date - now
+            println wildvalue + &#34;.daysToExpire=&#34; + duration.days  
+        }		
+	}
+}
+
+return (0);</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowsscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowscmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxcmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        </attributes>
+        <datapoints>
+        <datapoint>
+            <name>daysToExpire</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.daysToExpire</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr>&#60;= 15 15 30</alertexpr>
+            <alertmissing>2</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody>PaloAlto certificate ##INSTANCE## (##DSIDESCRIPTION##) on device ##HOST## is nearing and/or already passed its expiry date of &#39;##auto.certificate_expirydate##&#39; and should be renewed if this service is to be retained.
+
+This certificate is set to expire in ##VALUE## day(s) - as of ##START##
+Negative values mean the certificate already expired!</alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Remaining time for the certificate to expire (in days)</description>
+            <maxvalue></maxvalue>
+            <minvalue></minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        </datapoints>
+        <graphs>
+        </graphs>
+        <overviewgraphs>
+        </overviewgraphs>
+        <scripts>
+        </scripts>
+    </entry>
+</feed>
