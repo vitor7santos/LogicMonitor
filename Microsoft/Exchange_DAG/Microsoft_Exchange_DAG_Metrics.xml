@@ -1,0 +1,481 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<feed  version="1.0" hasPendingRequests="false" >
+  <company></company>
+  <status>200</status>
+  <errmsg>OK</errmsg>
+  <interval>0</interval>
+    <entry type="predatasource">
+        <version>1603990386</version>
+        <name>Microsoft_Exchange_DAG_Metrics</name>
+        <displayedas>Exchange DAG Metrics</displayedas>
+        <description>Monitors the &#39;ContentIndexState&#39; per DB</description>
+        <collector>batchscript</collector>
+        <hasMultiInstances>true</hasMultiInstances>
+        <schedule>300</schedule>
+        <appliesTo>(msexchange.user &#38;&#38; msexchange.pass) &#38;&#38; (hasCategory(&#34;MicrosoftExchange2007&#34;) || hasCategory(&#34;MicrosoftExchange2010&#34;) || hasCategory(&#34;MicrosoftExchange2013&#34;) || hasCategory(&#34;MicrosoftExchange2016&#34;) || hasCategory(&#34;MicrosoftExchange2019&#34;)) &#38;&#38; !hasCategory(&#34;WindowsCluster&#34;)</appliesTo>
+        <wildcardauto>true</wildcardauto>
+        <wildcardpersist>false</wildcardpersist>
+        <wildcardlinuxscript>ad_script</wildcardlinuxscript>
+        <wildcardlinuxcmdline>type=&#34;powerShell&#34; </wildcardlinuxcmdline>
+        <wildcardwinscript>ad_script</wildcardwinscript>
+        <wildcardwincmdline>type=&#34;powerShell&#34; </wildcardwincmdline>
+        <wildcardgroovyscript>#retrieving required properties
+$deviceName = &#34;##system.displayname##&#34;
+$username = &#34;##msexchange.user##&#34;
+$password = &#34;##msexchange.pass##&#34;
+
+# FUNCTION AREA
+function SpecialCharacterCheck() {
+# According to LM the Wildvalue(s) can&#39;t contain several characters
+# -&#62; https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery
+# Replacing  [&#39;=&#39;,&#39;:&#39;,&#39;\&#39;,&#39;#&#39;,&#39;space&#39;] characters
+
+	Param(
+	[Parameter(position = 0, Mandatory = $true)]
+	[string]$wildvalue
+	)
+	#iterate through the $password in order to find possible reserved characters
+	#WIKI -&#62; https://tools.ietf.org/html/rfc3986#section-2.2
+	if ($wildvalue -match &#39;\=&#39;){
+	#replace the &#39;@&#39; for its actual encoding representation
+	$wildvalue = $wildvalue -replace &#39;\=&#39;, &#39;&#39;
+	}
+	if ($wildvalue -match &#39;\:&#39;){
+	#replace the &#39;@&#39; for its actual encoding representation
+	$wildvalue = $wildvalue -replace &#39;\:&#39;, &#39;&#39;
+	}
+	if ($wildvalue -match &#39;\\&#39;){
+	#replace the &#39;@&#39; for its actual encoding representation
+	$wildvalue = $wildvalue -replace &#39;\\&#39;, &#39;&#39;
+	}
+	if ($wildvalue -match &#39;\#&#39;){
+	#replace the &#39;@&#39; for its actual encoding representation
+	$wildvalue = $wildvalue -replace &#39;\#&#39;, &#39;&#39;
+	}
+	if ($wildvalue -match &#39;\ &#39;){
+	#replace the &#39;@&#39; for its actual encoding representation
+	$wildvalue = $wildvalue -replace &#39;\ &#39;, &#39;&#39;
+	}
+	if ($wildvalue -match &#39;\.&#39;){
+	#replace the &#39;@&#39; for its actual encoding representation
+	$wildvalue = $wildvalue -replace &#39;\.&#39;, &#39;&#39;
+	}
+	Return $wildvalue
+}
+
+try{
+	$secpw = ConvertTo-SecureString $password -AsPlainText -Force
+	$cred  = New-Object Management.Automation.PSCredential ($username, $secpw)
+	$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://${deviceName}/PowerShell/ -Authentication Kerberos -Credential $cred
+
+	Import-PSSession $Session -DisableNameChecking
+
+	Get-MailboxDatabaseCopyStatus | ForEach-Object {
+		$ID = $_.Id
+		$wildvalue = SpecialCharacterCheck($ID)
+		$Name = $_.Name
+		$DatabaseName = $_.DatabaseName	
+
+		Write-Host &#34;${wildvalue}##${Name}######auto.DBName=${DatabaseName}&#34;
+	}
+
+	Remove-PSSession $Session
+	exit 0
+}catch{
+	exit 1
+}</wildcardgroovyscript>
+        <wildcardschedule>15</wildcardschedule>
+        <wildcarddisable>false</wildcarddisable>
+        <wildcarddeleteinactive>false</wildcarddeleteinactive>
+        <agdmethod>ilp</agdmethod>
+        <agdparams>auto.DBName</agdparams>
+        <group></group>
+        <tags></tags>
+        <technology>- Makes use of PS Remoting
+-&#62;https://docs.microsoft.com/en-us/powershell/exchange/connect-to-exchange-servers-using-remote-powershell?view=exchange-ps
+
+- Makes use of &#39;Exchange Server PowerShell&#39; so the user (msexchange.user) needs to have permissions to use it accordingly
+-&#62; https://docs.microsoft.com/en-us/powershell/exchange/open-the-exchange-management-shell?view=exchange-ps
+
+- Script to run needs have &#39;RemoteSigned&#39; permission
+- &#39;system.displayname&#39; prop needs to be in DNS (otherwise it&#39;ll not work)</technology>
+        <adlist><![CDATA[{"agdmethod":"ilp","method":"ad_script","agdparams":"auto.DBName","id":0,"filters":[],"params":{"type":"powerShell","groovyscript":"#retrieving required properties\r\n$deviceName = \"##system.displayname##\"\r\n$username = \"##msexchange.user##\"\r\n$password = \"##msexchange.pass##\"\r\n\r\n# FUNCTION AREA\r\nfunction SpecialCharacterCheck() {\r\n# According to LM the Wildvalue(s) can't contain several characters\r\n# -> https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery\r\n# Replacing  ['=',':','\\','#','space'] characters\r\n\r\n\tParam(\r\n\t[Parameter(position = 0, Mandatory = $true)]\r\n\t[string]$wildvalue\r\n\t)\r\n\t#iterate through the $password in order to find possible reserved characters\r\n\t#WIKI -> https://tools.ietf.org/html/rfc3986#section-2.2\r\n\tif ($wildvalue -match '\\='){\r\n\t#replace the '@' for its actual encoding representation\r\n\t$wildvalue = $wildvalue -replace '\\=', ''\r\n\t}\r\n\tif ($wildvalue -match '\\:'){\r\n\t#replace the '@' for its actual encoding representation\r\n\t$wildvalue = $wildvalue -replace '\\:', ''\r\n\t}\r\n\tif ($wildvalue -match '\\\\'){\r\n\t#replace the '@' for its actual encoding representation\r\n\t$wildvalue = $wildvalue -replace '\\\\', ''\r\n\t}\r\n\tif ($wildvalue -match '\\#'){\r\n\t#replace the '@' for its actual encoding representation\r\n\t$wildvalue = $wildvalue -replace '\\#', ''\r\n\t}\r\n\tif ($wildvalue -match '\\ '){\r\n\t#replace the '@' for its actual encoding representation\r\n\t$wildvalue = $wildvalue -replace '\\ ', ''\r\n\t}\r\n\tif ($wildvalue -match '\\.'){\r\n\t#replace the '@' for its actual encoding representation\r\n\t$wildvalue = $wildvalue -replace '\\.', ''\r\n\t}\r\n\tReturn $wildvalue\r\n}\r\n\r\ntry{\r\n\t$secpw = ConvertTo-SecureString $password -AsPlainText -Force\r\n\t$cred  = New-Object Management.Automation.PSCredential ($username, $secpw)\r\n\t$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://${deviceName}/PowerShell/ -Authentication Kerberos -Credential $cred\r\n\r\n\tImport-PSSession $Session -DisableNameChecking\r\n\r\n\tGet-MailboxDatabaseCopyStatus | ForEach-Object {\r\n\t\t$ID = $_.Id\r\n\t\t$wildvalue = SpecialCharacterCheck($ID)\r\n\t\t$Name = $_.Name\r\n\t\t$DatabaseName = $_.DatabaseName\t\r\n\r\n\t\tWrite-Host \"${wildvalue}##${Name}######auto.DBName=${DatabaseName}\"\r\n\t}\r\n\r\n\tRemove-PSSession $Session\r\n\texit 0\r\n}catch{\r\n\texit 1\r\n}"}}]]></adlist>
+        <schemaVersion>2</schemaVersion>
+        <dataSourceType>1</dataSourceType>
+        <attributes>
+        <attribute>
+            <name>scripttype</name>
+            <value>powerShell</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>scriptgroovy</name>
+            <value>#retrieving required properties
+$deviceName = &#34;##system.displayname##&#34;
+$username = &#34;##msexchange.user##&#34;
+$password = &#34;##msexchange.pass##&#34;
+
+# FUNCTION AREA
+function SpecialCharacterCheck() {
+# According to LM the Wildvalue(s) can&#39;t contain several characters
+# -&#62; https://www.logicmonitor.com/support/logicmodules/datasources/active-discovery/script-active-discovery
+# Replacing  [&#39;=&#39;,&#39;:&#39;,&#39;\&#39;,&#39;#&#39;,&#39;space&#39;] characters
+
+	Param(
+	[Parameter(position = 0, Mandatory = $true)]
+	[string]$wildvalue
+	)
+	#iterate through the $password in order to find possible reserved characters
+	#WIKI -&#62; https://tools.ietf.org/html/rfc3986#section-2.2
+	if ($wildvalue -match &#39;\=&#39;){
+	#replace the &#39;@&#39; for its actual encoding representation
+	$wildvalue = $wildvalue -replace &#39;\=&#39;, &#39;&#39;
+	}
+	if ($wildvalue -match &#39;\:&#39;){
+	#replace the &#39;@&#39; for its actual encoding representation
+	$wildvalue = $wildvalue -replace &#39;\:&#39;, &#39;&#39;
+	}
+	if ($wildvalue -match &#39;\\&#39;){
+	#replace the &#39;@&#39; for its actual encoding representation
+	$wildvalue = $wildvalue -replace &#39;\\&#39;, &#39;&#39;
+	}
+	if ($wildvalue -match &#39;\#&#39;){
+	#replace the &#39;@&#39; for its actual encoding representation
+	$wildvalue = $wildvalue -replace &#39;\#&#39;, &#39;&#39;
+	}
+	if ($wildvalue -match &#39;\ &#39;){
+	#replace the &#39;@&#39; for its actual encoding representation
+	$wildvalue = $wildvalue -replace &#39;\ &#39;, &#39;&#39;
+	}
+	if ($wildvalue -match &#39;\.&#39;){
+	#replace the &#39;@&#39; for its actual encoding representation
+	$wildvalue = $wildvalue -replace &#39;\.&#39;, &#39;&#39;
+	}
+	Return $wildvalue
+}
+
+try{
+	$secpw = ConvertTo-SecureString $password -AsPlainText -Force
+	$cred  = New-Object Management.Automation.PSCredential ($username, $secpw)
+	$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://${deviceName}/PowerShell/ -Authentication Kerberos -Credential $cred
+
+	Import-PSSession $Session -DisableNameChecking
+
+	Get-MailboxDatabaseCopyStatus | ForEach-Object {
+		$ID = $_.Id
+		$wildvalue = SpecialCharacterCheck($ID)
+		$Name = $_.Name
+		$DatabaseName = $_.DatabaseName
+		$ContentIndexState_raw = $_.ContentIndexState
+		$Status_raw = $_.Status
+
+		#convert the ContentIndexState into actual numeric values
+		If ($ContentIndexState_raw -like &#39;Healthy&#39;) {
+			$ContentIndexState = &#34;0&#34;
+		}ElseIf ($ContentIndexState_raw -like &#39;Failed&#39;){
+			$ContentIndexState = &#34;1&#34;
+		}ElseIf ($ContentIndexState_raw -like &#39;Crawling&#39;){
+			$ContentIndexState = &#34;2&#34;
+		}ElseIf ($ContentIndexState_raw -like &#39;Unknown&#39;){
+			$ContentIndexState = &#34;3&#34;
+		}
+
+		#convert the Status into actual numeric values
+		If ($Status_raw -like &#39;Healthy&#39;) {
+			$Status = &#34;0&#34;
+		}ElseIf ($Status_raw -like &#39;DisconnectedAndHealthy&#39;){
+			$Status = &#34;1&#34;
+		}ElseIf ($Status_raw -like &#39;DisconnectedAndResynchronizing&#39;){
+			$Status = &#34;2&#34;
+		}ElseIf ($Status_raw -like &#39;Dismounted&#39;){
+			$Status = &#34;3&#34;
+		}ElseIf ($Status_raw -like &#39;Dismounting&#39;){
+			$Status = &#34;4&#34;
+		}ElseIf ($Status_raw -like &#39;Failed&#39;){
+			$Status = &#34;5&#34;
+		}ElseIf ($Status_raw -like &#39;FailedAndSuspended&#39;){
+			$Status = &#34;6&#34;
+		}ElseIf ($Status_raw -like &#39;Suspended&#39;){
+			$Status = &#34;7&#34;
+		}ElseIf ($Status_raw -like &#39;Initializing&#39;){
+			$Status = &#34;8&#34;
+		}ElseIf ($Status_raw -like &#39;Mounted&#39;){
+			$Status = &#34;9&#34;
+		}ElseIf ($Status_raw -like &#39;Mounting&#39;){
+			$Status = &#34;10&#34;
+		}ElseIf ($Status_raw -like &#39;NonExchangeReplication&#39;){
+			$Status = &#34;11&#34;
+		}ElseIf ($Status_raw -like &#39;Resynchronizing&#39;){
+			$Status = &#34;12&#34;
+		}ElseIf ($Status_raw -like &#39;Seeding&#39;){
+			$Status = &#34;13&#34;
+		}ElseIf ($Status_raw -like &#39;SeedingSource&#39;){
+			$Status = &#34;14&#34;
+		}ElseIf ($Status_raw -like &#39;ServiceDown&#39;){
+			$Status = &#34;15&#34;
+		}ElseIf ($Status_raw -like &#39;Unknown&#39;){
+			$Status = &#34;16&#34;
+		}
+
+		Write-Host &#34;${wildvalue}.ContentIndexState=${ContentIndexState}&#34;
+		Write-Host &#34;${wildvalue}.Status=${Status}&#34;
+	}
+
+	Remove-PSSession $Session
+	exit 0
+}catch{
+	exit 1
+}</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowsscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowscmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxcmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        </attributes>
+        <datapoints>
+        <datapoint>
+            <name>ContentIndexState</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.ContentIndexState</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr>!= 0 0</alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody>Exchange DB &#39;##auto.DBName##&#39; Content Index State is not Healthy.
+Current State -&#62; ##VALUE##
+
+0 - Healthy
+1 - Failed	
+2 - Crawling	
+3 - Unknown
+
+This started at ##START## - or ##DURATION## ago.</alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>DB Content Index State
+
+0 - Healthy
+1 - Failed	
+2 - Crawling	
+3 - Unknown
+
+DOCS -&#62; https://docs.microsoft.com/en-us/previous-versions/office/developer/exchange-server-2010/dn506018(v=exchg.140)?redirectedfrom=MSDN</description>
+            <maxvalue>3</maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>Status</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>##WILDVALUE##.Status</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Gets the status of the database copy operation
+
+0-Healthy	
+1-DisconnectedAndHealthy
+2-DisconnectedAndResynchronizing
+3-Dismounted
+4-Dismounting
+5-Failed
+6-FailedAndSuspended
+7-Suspended
+8-Initializing
+9-Mounted
+10-Mounting
+11-NonExchangeReplication
+12-Resynchronizing
+13-Seeding
+14-SeedingSource
+15-ServiceDown
+16-Unknown
+
+DOCS -&#62; https://docs.microsoft.com/en-us/previous-versions/office/developer/exchange-server-2010/ff323252%28v%3dexchg.140%29</description>
+            <maxvalue>16</maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>StatusAlarm</name>
+            <dataType>7</dataType>
+            <type>2</type>
+            <postprocessormethod>expression</postprocessormethod>
+            <postprocessorparam>in(1,2,3,4,5,6,7,Status)</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr>!= 0 0</alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody>Exchange DB &#39;##auto.DBName##&#39; Status is not Healthy.
+
+This started at ##START## - or ##DURATION## ago.</alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>Gets the status of the database copy operation
+
+This will alarm (==1) if the &#39;Status&#39; datapoint is one of the below:
+
+1-DisconnectedAndHealthy
+2-DisconnectedAndResynchronizing
+3-Dismounted
+4-Dismounting
+5-Failed
+6-FailedAndSuspended
+7-Suspended
+
+DOCS -&#62; https://docs.microsoft.com/en-us/previous-versions/office/developer/exchange-server-2010/ff323252%28v%3dexchg.140%29</description>
+            <maxvalue>1</maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>ReturnCode</name>
+            <dataType>4</dataType>
+            <type>2</type>
+            <postprocessormethod>none</postprocessormethod>
+            <postprocessorparam></postprocessorparam>
+            <usevalue>exitCode</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>0 - Success
+1 - Error</description>
+            <maxvalue>1</maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        </datapoints>
+        <graphs>
+        </graphs>
+        <overviewgraphs>
+        <overviewgraph>
+            <name>ContentIndexState</name>
+            <title>Content Index State</title>
+            <verticallabel>State</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>3.0</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>1</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>ContentIndexState</name>
+            <datapointname>ContentIndexState</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE##</legend>
+                <datapointname>ContentIndexState</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
+        <overviewgraph>
+            <name>Status</name>
+            <title>Status</title>
+            <verticallabel>State</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>16.0</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>2</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <aggregated>false</aggregated>
+            <datapoints>
+        <overviewgraphdatapoint>
+            <name>Status</name>
+            <datapointname>Status</datapointname>
+            <cf>1</cf>
+            <aggregateMethod>sum</aggregateMethod>
+        </overviewgraphdatapoint>
+            </datapoints>
+            <virtualdatapoints>
+            </virtualdatapoints>
+            <lines>
+            <overviewgraphline>
+                <type>1</type>
+                <legend>##INSTANCE##</legend>
+                <datapointname>Status</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+                <color>silver</color>
+            </overviewgraphline>
+            </lines>
+        </overviewgraph>
+        </overviewgraphs>
+        <scripts>
+        </scripts>
+    </entry>
+</feed>
