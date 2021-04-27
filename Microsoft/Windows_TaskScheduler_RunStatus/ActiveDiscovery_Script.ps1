@@ -60,7 +60,7 @@ $scriptToExecute =
 }
 
 # check if wmi.user/pass retrieved value(s)
-if ($username -and $password) {
+if ($username -and $password -and ($username -ne '##wmi.'+'user##') -and ($password -ne '##wmi.'+'pass##')) {
     # if yes, impersonate the user in question
     $result = Invoke-Command -ScriptBlock $scriptToExecute -ComputerName "${deviceName}" -credential $cred
     write $result
