@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<feed  version="1.0" hasPendingRequests="false" >
+  <company></company>
+  <status>200</status>
+  <errmsg>OK</errmsg>
+  <interval>0</interval>
+    <entry type="predatasource">
+        <version>1651686132</version>
+        <name>PaloAlto_FW_RunningConfigXML</name>
+        <displayedas>PanOS Config (XML)</displayedas>
+        <description>Captures the running configuration for Palo Alto firewalls in XML format.</description>
+        <collector>script</collector>
+        <hasMultiInstances>false</hasMultiInstances>
+        <useWildValueAsUniqueIdentifier>false</useWildValueAsUniqueIdentifier>
+        <schedule>28800</schedule>
+        <appliesTo>hasCategory(&#34;PaloAlto&#34;) &#38;&#38;
+paloalto.apikey.pass</appliesTo>
+        <wildcardauto>false</wildcardauto>
+        <wildcardpersist>false</wildcardpersist>
+        <wildcardlinuxscript></wildcardlinuxscript>
+        <wildcardlinuxcmdline></wildcardlinuxcmdline>
+        <wildcardwinscript></wildcardwinscript>
+        <wildcardwincmdline></wildcardwincmdline>
+        <wildcardgroovyscript></wildcardgroovyscript>
+        <wildcardschedule>1440</wildcardschedule>
+        <wildcarddisable>false</wildcarddisable>
+        <wildcarddeleteinactive>false</wildcarddeleteinactive>
+        <agdmethod>none</agdmethod>
+        <agdparams></agdparams>
+        <group></group>
+        <tags>firewall,network,hardware,paloalto</tags>
+        <technology>- requires API key device property set as &#39;paloalto.apikey.pass&#39;
+- xml format suitable for restoring from backup</technology>
+        <adlist><![CDATA[{"agdmethod":"none","agdparams":"","id":0,"filters":[],"params":{}}]]></adlist>
+        <schemaVersion>2</schemaVersion>
+    <integrationMetadata>
+        <integrationVersion>1.2.0</integrationVersion>
+        <integrationAuthorCompanyUuid>93a8113d-0a80-11e3-89bb-0050569703a4</integrationAuthorCompanyUuid>
+        <integrationLineageId>-lEXLvQCTJW_ZUSweYJ4HA</integrationLineageId>
+        <integrationChecksum>01fe3e6b51a5441ebc80b603d0cb834b</integrationChecksum>
+        <integrationAuthorNamespace>core</integrationAuthorNamespace>
+        <integrationId>1765c12f-4a08-4b60-8bb7-61a48c8a8bc1</integrationId>
+    </integrationMetadata>
+        <dataSourceType>2</dataSourceType>
+        <attributes>
+        <attribute>
+            <name>scripttype</name>
+            <value>embed</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>scriptgroovy</name>
+            <value>import com.santaba.agent.groovyapi.http.*;
+
+def host = hostProps.get(&#34;system.hostname&#34;);
+def key = hostProps.get(&#34;paloalto.apikey.pass&#34;).trim();
+
+if(!key) {
+	println &#34;Cannot retrieve the paloalto.apikey.pass property.  This is necessary in order to access the api.&#34;;//DEBUG
+	println &#34;To generate an api key, use the following url against your PaloAlto device:&#34;;//DEBUG
+	println &#34;https://${host}/api/?type=keygen&#38;user=&#60;admin_username&#62;&#38;password=&#60;admin_password&#62;&#34;;//DEBUG
+	return 1;
+}
+
+try{//try to grab the configuration using the 1st API variation
+	def config = &#34;https://${host}/esp/restapi.esp?type=config&#38;action=show&#38;key=${key}&#34;.toURL().text;//retrieve config
+	println config;//output config
+	return 0;
+}catch(Exception exc){//something went wrong with the 1st API variation, try with the 2nd
+	try{
+		config = &#34;https://${host}/api/?type=config&#38;action=show&#38;key=${key}&#34;.toURL().text;//retrieve config
+		println config;//output config
+		return 0;
+	}catch(Exception exc1){//seomething went wrong with both variations...
+		println &#34;first attempt failed, error: ${exc}&#34;;//DEBUG
+		println &#34;second attempt failed, error: ${exc1}&#34;;//DEBUG
+		return 1;
+	}
+}</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowsscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowscmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxcmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>properties</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>csfileformat</name>
+            <value>arbitrary</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>cstimestampformat</name>
+            <value>yyyy-MM-dd hh:mm:ss z</value>
+            <comment></comment>
+        </attribute>
+        </attributes>
+        <datapoints>
+        <datapoint>
+            <name>RetrievalTest</name>
+            <originId></originId>
+            <dataType>1</dataType>
+            <type>2</type>
+            <postprocessormethod>none</postprocessormethod>
+            <postprocessorparam>{&#34;fetch_check&#34;:{&#34;fetch&#34;:0},&#34;format&#34;:&#34;arbitrary&#34;}</postprocessorparam>
+            <usevalue></usevalue>
+            <alertexpr>= 1</alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description></description>
+            <maxvalue>1</maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1>fetch</userparam1>
+            <userparam2>false</userparam2>
+            <userparam3>0</userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        </datapoints>
+        <graphs>
+        </graphs>
+        <overviewgraphs>
+        </overviewgraphs>
+        <scripts>
+        </scripts>
+    </entry>
+</feed>
