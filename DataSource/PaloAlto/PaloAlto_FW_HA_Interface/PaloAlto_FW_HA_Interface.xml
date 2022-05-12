@@ -1,0 +1,516 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<feed  version="1.0" hasPendingRequests="false" >
+  <company></company>
+  <status>200</status>
+  <errmsg>OK</errmsg>
+  <interval>0</interval>
+    <entry type="predatasource">
+        <version>1652364142</version>
+        <name>PaloAlto_FW_HA_Interface</name>
+        <displayedas>Interfaces High Availability</displayedas>
+        <description>HA Interface Statistics; available only on units that have HA enabled</description>
+        <collector>script</collector>
+        <hasMultiInstances>true</hasMultiInstances>
+        <useWildValueAsUniqueIdentifier>false</useWildValueAsUniqueIdentifier>
+        <schedule>180</schedule>
+        <appliesTo>hasCategory(&#34;PaloAlto&#34;)</appliesTo>
+        <wildcardauto>true</wildcardauto>
+        <wildcardpersist>false</wildcardpersist>
+        <wildcardlinuxscript>ad_script</wildcardlinuxscript>
+        <wildcardlinuxcmdline>type=&#34;embeded&#34; </wildcardlinuxcmdline>
+        <wildcardwinscript>ad_script</wildcardwinscript>
+        <wildcardwincmdline>type=&#34;embeded&#34; </wildcardwincmdline>
+        <wildcardgroovyscript>/*******************************************************************************
+ * © 2007-2022 - LogicMonitor, Inc. All rights reserved.
+ ******************************************************************************/
+
+def host = hostProps.get(&#34;system.hostname&#34;)
+def apikey = hostProps.get(&#34;paloalto.apikey.pass&#34;)?.trim()
+if (apikey == null) {
+    println &#34;No paloalto.apikey.pass set&#34;
+    return 1
+}
+
+def interfaceListResponse
+def interfaceListCommand = URLEncoder.encode(&#34;&#60;show&#62;&#60;interface&#62;all&#60;/interface&#62;&#60;/show&#62;&#34;, &#34;UTF-8&#34;)
+def interfaceListUrl = &#34;https://${host}/api/?type=op&#38;key=${apikey}&#38;cmd=${interfaceListCommand}&#34;
+def getRequestConn1 = interfaceListUrl.toURL().openConnection()
+if (getRequestConn1.responseCode == 200) {
+    interfaceListResponse = new XmlSlurper().parseText(getRequestConn1.content.text)
+} else {
+    println &#34;Failed to GET &#60;show&#62;&#60;interface&#62;all&#60;/interface&#62;&#60;/show&#62;\nStatus code: ${getRequestConn1.responseCode}&#34;
+    return 1
+}
+
+// Iterate through interface list
+interfaceListResponse.result.hw.entry.each() {
+    def intName = it.name.text()
+
+    // Get the counter stats for this interface
+    def intCounterObject
+    def intCounterCommand = URLEncoder.encode(&#34;&#60;show&#62;&#60;interface&#62;&#34; + intName + &#34;&#60;/interface&#62;&#60;/show&#62;&#34;, &#34;UTF-8&#34;)
+    def intCounterUrl = &#34;https://${host}/api/?type=op&#38;key=${apikey}&#38;cmd=${intCounterCommand}&#34;
+    def getRequestConn2 = interfaceListUrl.toURL().openConnection()
+    if (getRequestConn2.responseCode == 200) {
+        intCounterObject = new XmlSlurper().parseText(getRequestConn2.content.text)
+    } else {
+        println &#34;Failed to GET &#60;show&#62;&#60;interface&#62;&#34; + intName + &#34;&#60;/interface&#62;&#60;/show&#62;\nStatus code: ${getRequestConn2.responseCode}&#34;
+        return
+    }
+
+    def intCounterStats = intCounterObject.depthFirst().find { entry -&#62; entry.name.text() == intName }
+
+    // Is this an HA interface?
+    if (intCounterStats[&#39;name&#39;].text().startsWith(&#39;ha&#39;)) {
+        // Is it the data link?
+        if (intCounterStats[&#39;ha_func&#39;].text() == &#39;data-link&#39;) { // yes
+            println intName + &#34;##&#34; + intName + &#34;##&#34; + &#34;data-link&#34;
+        } else { // no, must be the control link
+            println intName + &#34;##&#34; + intName + &#34;##&#34; + &#34;control-link&#34;
+        }
+    }
+}
+
+return 0</wildcardgroovyscript>
+        <wildcardschedule>0</wildcardschedule>
+        <wildcarddisable>false</wildcarddisable>
+        <wildcarddeleteinactive>false</wildcarddeleteinactive>
+        <agdmethod>none</agdmethod>
+        <agdparams></agdparams>
+        <group></group>
+        <tags>high availability,ha,interface,network,paloalto</tags>
+        <technology>Requires API token.
+
+Support Documentation: https://www.logicmonitor.com/support/monitoring/networking-firewalls/palo-alto-firewalls</technology>
+        <adlist><![CDATA[{"agdmethod":"none","method":"ad_script","agdparams":"","id":0,"filters":[],"params":{"type":"embeded","groovyscript":"/*******************************************************************************\n * © 2007-2022 - LogicMonitor, Inc. All rights reserved.\n ******************************************************************************/\n\ndef host = hostProps.get(\"system.hostname\")\ndef apikey = hostProps.get(\"paloalto.apikey.pass\")?.trim()\nif (apikey == null) {\n    println \"No paloalto.apikey.pass set\"\n    return 1\n}\n\ndef interfaceListResponse\ndef interfaceListCommand = URLEncoder.encode(\"<show><interface>all<\/interface><\/show>\", \"UTF-8\")\ndef interfaceListUrl = \"https://${host}/api/?type=op&key=${apikey}&cmd=${interfaceListCommand}\"\ndef getRequestConn1 = interfaceListUrl.toURL().openConnection()\nif (getRequestConn1.responseCode == 200) {\n    interfaceListResponse = new XmlSlurper().parseText(getRequestConn1.content.text)\n} else {\n    println \"Failed to GET <show><interface>all<\/interface><\/show>\\nStatus code: ${getRequestConn1.responseCode}\"\n    return 1\n}\n\n// Iterate through interface list\ninterfaceListResponse.result.hw.entry.each() {\n    def intName = it.name.text()\n\n    // Get the counter stats for this interface\n    def intCounterObject\n    def intCounterCommand = URLEncoder.encode(\"<show><interface>\" + intName + \"<\/interface><\/show>\", \"UTF-8\")\n    def intCounterUrl = \"https://${host}/api/?type=op&key=${apikey}&cmd=${intCounterCommand}\"\n    def getRequestConn2 = interfaceListUrl.toURL().openConnection()\n    if (getRequestConn2.responseCode == 200) {\n        intCounterObject = new XmlSlurper().parseText(getRequestConn2.content.text)\n    } else {\n        println \"Failed to GET <show><interface>\" + intName + \"<\/interface><\/show>\\nStatus code: ${getRequestConn2.responseCode}\"\n        return\n    }\n\n    def intCounterStats = intCounterObject.depthFirst().find { entry -> entry.name.text() == intName }\n\n    // Is this an HA interface?\n    if (intCounterStats['name'].text().startsWith('ha')) {\n        // Is it the data link?\n        if (intCounterStats['ha_func'].text() == 'data-link') { // yes\n            println intName + \"##\" + intName + \"##\" + \"data-link\"\n        } else { // no, must be the control link\n            println intName + \"##\" + intName + \"##\" + \"control-link\"\n        }\n    }\n}\n\nreturn 0"}}]]></adlist>
+        <schemaVersion>2</schemaVersion>
+    <integrationMetadata>
+        <integrationVersion>1.0.0</integrationVersion>
+        <integrationAuthorCompanyUuid>11ef0f0c-72e6-44fe-8789-346cbd38a466</integrationAuthorCompanyUuid>
+        <integrationLineageId>iYlbIy46T0mYUZ9TyKr35g</integrationLineageId>
+        <integrationChecksum>19b80df1a1d42a00490d7baaff2a47b3</integrationChecksum>
+        <integrationAuthorNamespace>eci</integrationAuthorNamespace>
+        <integrationId>cfedaef2-d1d5-4fc8-ad1e-f65dd6100b87</integrationId>
+        <integrationLocator></integrationLocator>
+        <integrationName></integrationName>
+    </integrationMetadata>
+        <dataSourceType>1</dataSourceType>
+        <attributes>
+        <attribute>
+            <name>scripttype</name>
+            <value>embed</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>scriptgroovy</name>
+            <value>/*******************************************************************************
+ * © 2007-2022 - LogicMonitor, Inc. All rights reserved.
+ ******************************************************************************/
+def host = hostProps.get(&#34;system.hostname&#34;)
+def sw_version = hostProps.get(&#34;auto.paloalto.system.software_version&#34;);
+def apikey = hostProps.get(&#34;paloalto.apikey.pass&#34;)?.trim()
+if (apikey == null) {
+    println &#34;No paloalto.apikey.pass set&#34;
+    return 1
+}
+
+def intName = instanceProps.get(&#34;wildvalue&#34;)
+
+// Get the counter stats for this interface
+def intCounterObject
+def intCounterCommand = URLEncoder.encode(&#34;&#60;show&#62;&#60;interface&#62;&#34; + intName + &#34;&#60;/interface&#62;&#60;/show&#62;&#34;, &#34;UTF-8&#34;)
+def intCounterUrl = &#34;https://${host}/api/?type=op&#38;key=${apikey}&#38;cmd=${intCounterCommand}&#34;
+def getRequestConn = intCounterUrl.toURL().openConnection()
+if (getRequestConn.responseCode == 200) {
+    intCounterObject = new XmlSlurper().parseText(getRequestConn.content.text)
+} else {
+    println &#34;Failed to GET &#60;show&#62;&#60;interface&#62;&#34; + intName + &#34;&#60;/interface&#62;&#60;/show&#62;\nStatus code: ${getRequestConn.responseCode}&#34;
+    return
+}
+
+if(sw_version.replace(&#34;.&#34;,&#34;&#34;).toInteger() &#62;= 1020){//version is &#62;=10.2.*
+	rx_bytes   = intCounterObject[&#39;result&#39;][&#39;ifnet&#39;][&#39;counters&#39;][&#39;rx-bytes&#39;].text()
+	tx_bytes   = intCounterObject[&#39;result&#39;][&#39;ifnet&#39;][&#39;counters&#39;][&#39;tx-bytes&#39;].text()
+	rx_packets = intCounterObject[&#39;result&#39;][&#39;ifnet&#39;][&#39;counters&#39;][&#39;rx-packets&#39;].text()
+	tx_packets = intCounterObject[&#39;result&#39;][&#39;ifnet&#39;][&#39;counters&#39;][&#39;tx-packets&#39;].text()
+	rx_drops   = intCounterObject[&#39;result&#39;][&#39;ifnet&#39;][&#39;counters&#39;][&#39;rx-drop&#39;].text()
+	rx_errors  = intCounterObject[&#39;result&#39;][&#39;ifnet&#39;][&#39;counters&#39;][&#39;rx-errs&#39;].text()
+}else{
+	def intCounterStats = intCounterObject.depthFirst().find { entry -&#62; entry.name.text() == intName }
+
+	// DEBUG -- datastructure output
+	// println groovy.xml.XmlUtil.serialize(intCounterStats)
+
+	// Where are the counters on this interface?
+	// Is this an HA control link?
+	if (intCounterStats[&#39;ha_func&#39;].text() == &#39;data-link&#39;) { // yes -- counters are in counters.ifnet.entry
+	  rx_bytes   = intCounterStats[&#39;counters&#39;][&#39;ifnet&#39;][&#39;entry&#39;][&#39;ibytes&#39;].text()
+	  tx_bytes   = intCounterStats[&#39;counters&#39;][&#39;ifnet&#39;][&#39;entry&#39;][&#39;obytes&#39;].text()
+	  rx_packets = intCounterStats[&#39;counters&#39;][&#39;ifnet&#39;][&#39;entry&#39;][&#39;ipackets&#39;].text()
+	  tx_packets = intCounterStats[&#39;counters&#39;][&#39;ifnet&#39;][&#39;entry&#39;][&#39;opackets&#39;].text()
+	  rx_drops   = intCounterStats[&#39;counters&#39;][&#39;ifnet&#39;][&#39;entry&#39;][&#39;idrops&#39;].text()
+	  rx_errors  = intCounterStats[&#39;counters&#39;][&#39;ifnet&#39;][&#39;entry&#39;][&#39;ierrors&#39;].text() 
+	} else { // yes - counters are in counters 
+	  rx_bytes   = intCounterStats[&#39;counters&#39;][&#39;rx-bytes&#39;].text()
+	  tx_bytes   = intCounterStats[&#39;counters&#39;][&#39;tx-bytes&#39;].text()
+	  rx_packets = intCounterStats[&#39;counters&#39;][&#39;rx-packets&#39;].text()
+	  tx_packets = intCounterStats[&#39;counters&#39;][&#39;tx-packets&#39;].text()
+	  rx_drops   = intCounterStats[&#39;counters&#39;][&#39;rx-drop&#39;].text()
+	  rx_errors  = intCounterStats[&#39;counters&#39;][&#39;rx-errs&#39;].text()
+	}
+}
+
+// Output the normalized data
+println &#34;rx_bytes: &#34; + rx_bytes
+println &#34;tx_bytes: &#34; + tx_bytes
+println &#34;rx_packets: &#34; + rx_packets
+println &#34;tx_packets: &#34; + tx_packets
+println &#34;rx_drops: &#34; + rx_drops
+println &#34;rx_errors: &#34; + rx_errors
+
+return 0</value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowsscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxscript</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>windowscmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>linuxcmdline</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        <attribute>
+            <name>properties</name>
+            <value></value>
+            <comment></comment>
+        </attribute>
+        </attributes>
+        <datapoints>
+        <datapoint>
+            <name>rx_bytes</name>
+            <originId></originId>
+            <dataType>7</dataType>
+            <type>3</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>rx_bytes</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>bytes received</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>rx_drops</name>
+            <originId></originId>
+            <dataType>7</dataType>
+            <type>3</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>rx_drops</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>number of dropped packets</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>rx_errors</name>
+            <originId></originId>
+            <dataType>7</dataType>
+            <type>3</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>rx_errors</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>number of packets received with errors</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>rx_packets</name>
+            <originId></originId>
+            <dataType>7</dataType>
+            <type>3</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>rx_packets</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>number of packets received</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>tx_bytes</name>
+            <originId></originId>
+            <dataType>7</dataType>
+            <type>3</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>tx_bytes</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description>bytes transmitted</description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        <datapoint>
+            <name>tx_packets</name>
+            <originId></originId>
+            <dataType>7</dataType>
+            <type>3</type>
+            <postprocessormethod>namevalue</postprocessormethod>
+            <postprocessorparam>tx_packets</postprocessorparam>
+            <usevalue>output</usevalue>
+            <alertexpr></alertexpr>
+            <alertmissing>1</alertmissing>
+            <alertsubject></alertsubject>
+            <alertbody></alertbody>
+            <enableanomalyalertsuppression></enableanomalyalertsuppression>
+            <adadvsettingenabled>false</adadvsettingenabled>
+            <warnadadvsetting></warnadadvsetting>
+            <erroradadvsetting></erroradadvsetting>
+            <criticaladadvsetting></criticaladadvsetting>
+            <description></description>
+            <maxvalue></maxvalue>
+            <minvalue>0</minvalue>
+            <userparam1></userparam1>
+            <userparam2></userparam2>
+            <userparam3></userparam3>
+            <iscomposite>false</iscomposite>
+            <rpn></rpn>
+            <alertTransitionIval>0</alertTransitionIval>
+            <alertClearTransitionIval>0</alertClearTransitionIval>
+        </datapoint>
+        </datapoints>
+        <graphs>
+        <graph>
+            <name>Interface Errors</name>
+            <title>Interface Errors</title>
+            <originId></originId>            <verticallabel>packets/sec</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>NaN</minvalue>
+            <displayprio>1</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>rx_drops</name>
+            <datapointname>rx_drops</datapointname>
+            <originId></originId>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>rx_errors</name>
+            <datapointname>rx_errors</datapointname>
+            <originId></originId>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>drops</legend>
+                <color>red</color>
+                <datapointname>rx_drops</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>receive errors</legend>
+                <color>orange</color>
+                <datapointname>rx_errors</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>Interface Throughput</name>
+            <title>Interface Throughput</title>
+            <originId></originId>            <verticallabel>bits/sec</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>1</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>rx_bytes</name>
+            <datapointname>rx_bytes</datapointname>
+            <originId></originId>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>tx_bytes</name>
+            <datapointname>tx_bytes</datapointname>
+            <originId></originId>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+        <graphvirtualdatapoint>
+            <name>rx_bits</name>
+            <rpn>rx_bytes * 8</rpn>
+            <originId></originId>
+        </graphvirtualdatapoint>
+        <graphvirtualdatapoint>
+            <name>tx_bits</name>
+            <rpn>tx_bytes * 8</rpn>
+            <originId></originId>
+        </graphvirtualdatapoint>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>receives</legend>
+                <color>blue</color>
+                <datapointname>rx_bits</datapointname>
+                <isvirtualdatapoint>true</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>transmits</legend>
+                <color>green</color>
+                <datapointname>tx_bits</datapointname>
+                <isvirtualdatapoint>true</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        <graph>
+            <name>Packet Throughput</name>
+            <title>Packet Throughput</title>
+            <originId></originId>            <verticallabel>packets/sec</verticallabel>
+            <rigid>false</rigid>
+            <maxvalue>NaN</maxvalue>
+            <minvalue>0.0</minvalue>
+            <displayprio>1</displayprio>
+            <timescale>1day</timescale>
+            <base1024>false</base1024>
+            <graphdatapoints>
+        <graphdatapoint>
+            <name>rx_packets</name>
+            <datapointname>rx_packets</datapointname>
+            <originId></originId>
+            <cf>1</cf>
+        </graphdatapoint>
+        <graphdatapoint>
+            <name>tx_packets</name>
+            <datapointname>tx_packets</datapointname>
+            <originId></originId>
+            <cf>1</cf>
+        </graphdatapoint>
+            </graphdatapoints>
+            <graphvirtualdatapoints>
+            </graphvirtualdatapoints>
+            <graphdatas>
+            <graphdata>
+                <type>1</type>
+                <legend>receives</legend>
+                <color>blue</color>
+                <datapointname>rx_packets</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            <graphdata>
+                <type>1</type>
+                <legend>transmits</legend>
+                <color>green</color>
+                <datapointname>tx_packets</datapointname>
+                <isvirtualdatapoint>false</isvirtualdatapoint>
+            </graphdata>
+            </graphdatas>
+        </graph>
+        </graphs>
+        <overviewgraphs>
+        </overviewgraphs>
+        <scripts>
+        </scripts>
+    </entry>
+</feed>
